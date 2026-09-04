@@ -1,0 +1,236 @@
+﻿@model List<PSS_Time_Tracker.Models.EmployeeViewModel>
+
+@{
+    ViewData["Title"] = "Employee Timesheets";
+    int currentPage = ViewBag.CurrentPage ?? 1;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    bool hasPrevious = ViewBag.HasPrevious ?? false;
+    bool hasNext = ViewBag.HasNext ?? false;
+    string searchTerm = ViewBag.SearchTerm as string ?? string.Empty;
+}
+
+<div class="row">
+    <div class="col">
+        <div class="card shadow-lg rounded-4 p-4 mt-4 mb-5 form-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 class="card-title mb-0">@ViewData["Title"]</h2>
+            </div>
+            <div class="card-body">
+
+                <!-- Search bar -->
+                <div class="mb-3">
+                    <form method="get" asp-action="Index">
+                        <div class="input-group">
+                            <input type="text" name="searchTerm" class="form-control" placeholder="Search by employee full name..."
+                                   value="@searchTerm" />
+                            <button class="btn btn-outline-secondary" type="submit">Search</button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="resetSearch()">Reset</button>
+                        </div>
+                    </form>
+                </div>
+
+                @if (!Model.Any())
+                {
+                    <div class="alert alert-info" role="alert">
+                        <h4>No timesheet entries found.</h4>
+                        <p>There are no timesheet entries available.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert" role="alert">
+                        <strong>Note:</strong> Click the employee's full name to view their detailed timesheet.
+                    </div>
+
+                    <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Employee Name</th>
+                                <th>Timesheet Entries</th>
+                                <th>Latest Entry</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var employee in Model)
+                            {
+                                <tr>
+                                    <td>
+                                        <a asp-action="EmployeeTimeSheetDetails" asp-route-id="@employee.AzureAdUserId" style="color: #c82333;">
+                                            @employee.FullName
+                                        </a>
+                                    </td>
+                                    <td>@employee.TimesheetCount</td>
+                                    <td>@employee.LatestEntry.ToString("yyyy-MM-dd")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    </div>
+                
+                    <!-- Pagination controls -->
+                    <nav aria-label="Employee pagination">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item @(!hasPrevious ? "disabled" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-page="@(currentPage - 1)"
+                                   asp-route-searchTerm="@searchTerm">Previous</a>
+                            </li>
+
+                            @{
+                                // Calculate the range of pages to show (5 at a time)
+                                int startPage = Math.Max(1, currentPage - 2);
+                                int endPage = Math.Min(totalPages, startPage + 4);
+
+                                // Adjust if we're at the beginning or end
+                                if (endPage - startPage < 4 && totalPages > 5)
+                                {
+                                    if (currentPage < 3)
+                                    {
+                                        endPage = Math.Min(5, totalPages);
+                                    }
+                                    else if (currentPage > totalPages - 2)
+                                    {
+                                        startPage = Math.Max(1, totalPages - 4);
+                                    }
+                                }
+
+                                // Always show first page if not in current range
+                                if (startPage > 1)
+                                {
+                                    <li class="page-item @(1 == currentPage ? "active" : "")">
+                                        <a class="page-link"
+                                           asp-action="Index"
+                                           asp-route-page="1"
+                                           asp-route-searchTerm="@searchTerm"
+                                           style="color: #c82333;">1</a>
+                                    </li>
+                                    if (startPage > 2)
+                                    {
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
+                                        </li>
+                                    }
+                                }
+
+                                // Show the calculated page range
+                                @for (int i = startPage; i <= endPage; i++)
+                                {
+                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                        <a class="page-link"
+                                           asp-action="Index"
+                                           asp-route-page="@i"
+                                           asp-route-searchTerm="@searchTerm"
+                                           style="color: #c82333;">@i</a>
+                                    </li>
+                                }
+
+                                // Always show last page if not in current range
+                                if (endPage < totalPages)
+                                {
+                                    if (endPage < totalPages - 1)
+                                    {
+                                        <li class="page-item disabled">
+                                            <span class="page-link">...</span>
+                                        </li>
+                                    }
+                                    <li class="page-item @(totalPages == currentPage ? "active" : "")">
+                                        <a class="page-link"
+                                           asp-action="Index"
+                                           asp-route-page="@totalPages"
+                                           asp-route-searchTerm="@searchTerm"
+                                           style="color: #c82333;">@totalPages</a>
+                                    </li>
+                                }
+                            }
+
+                            <li class="page-item @(!hasNext ? "disabled" : "")">
+                                <a class="page-link"
+                                   asp-action="Index"
+                                   asp-route-page="@(currentPage + 1)"
+                                   asp-route-searchTerm="@searchTerm">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                    // <nav aria-label="Employee pagination">
+                    //     <ul class="pagination justify-content-center">
+                    //         <li class="page-item @(!hasPrevious ? "disabled" : "")">
+                    //             <a class="page-link"
+                    //                asp-action="Index"
+                    //                asp-route-page="@(currentPage - 1)"
+                    //                asp-route-searchTerm="@searchTerm">Previous</a>
+                    //         </li>
+
+                    //         @for (int i = 1; i <= totalPages; i++)
+                    //         {
+                    //             <li class="page-item @(i == currentPage ? "active" : "")">
+                    //                 <a class="page-link"
+                    //                    asp-action="Index"
+                    //                    asp-route-page="@i"
+                    //                    asp-route-searchTerm="@searchTerm"
+                    //                    style="color: #c82333;">@i</a>
+                    //             </li>
+                    //         }
+
+                    //         <li class="page-item @(!hasNext ? "disabled" : "")">
+                    //             <a class="page-link"
+                    //                asp-action="Index"
+                    //                asp-route-page="@(currentPage + 1)"
+                    //                asp-route-searchTerm="@searchTerm">Next</a>
+                    //         </li>
+                    //     </ul>
+                    // </nav>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        function resetSearch() {
+            // Redirect to the Index action without any query parameters
+            window.location.href = '@Url.Action("Index", "Manager")';
+        }
+    </script>
+}
+
+    <style>
+
+    body {
+        min-height: 100vh;
+        width: 100vw;
+        background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+    }
+
+    .form-card {
+        max-width: 1250px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+
+    /* Responsive table container */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optional: Make table font smaller and reduce padding on small screens */
+@@media (max-width: 768px) {
+    .table thead th,
+    .table tbody td {
+        font-size: 0.95rem;
+        padding: 0.4rem 0.5rem;
+        white-space: nowrap;
+    }
+    .form-card {
+        padding: 0.5rem !important;
+    }
+}
+    </style>

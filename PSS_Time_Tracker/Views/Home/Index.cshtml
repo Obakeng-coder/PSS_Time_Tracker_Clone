@@ -1,0 +1,300 @@
+﻿<!-- Theme Styles -->
+<link href="~/assets/css/Home.css" rel="stylesheet">
+
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+
+<br />
+<!-- What We Do Section -->
+<div class="container-fluid px-0">
+    <div class="container mt-5 mb-5">
+       @*  <div class="row justify-content-center">
+            <div class="col-12 text-center">
+                <h2 class="mb-2" style="color: #FFFFFF;">Getting Started</h2>
+                <div class="custom-dotted-underline"></div>
+            </div>
+        </div> *@
+
+        <!-- Three Boxes with Icons -->
+        <div class="row mt-4 gx-3">
+
+            <!-- Box 1 - With Visual Steps -->
+            <div class="col-md-4 mb-3">
+                <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
+                     style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
+
+                    <div>
+                        <div class="icon-container" style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px;">
+                            <img src="/assets/images/icon1.png" alt="Capture Time Icon" class="img-fluid">
+                        </div>
+                        <h5 style="padding-right: 50px; margin-bottom: 20px;">Capture Your Time</h5>
+                        <!-- Add the image here -->
+                        <div class="text-center mb-3">
+                            <img src="/assets/images/Home1.jpg" alt="Capture Your Time" class="box-image">
+                        </div>
+                        <br/>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">1</span>
+                            <span>Go to the <strong>Capture Your Timesheet</strong> page</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">2</span>
+                            <span>Enter your <strong>Host Company Name</strong> and <strong>Date of Entry</strong></span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">3</span>
+                            <span>Fill in <strong>Start Time</strong> and <strong>End Time</strong></span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">4</span>
+                            <span>Describe your <strong>Daily Task</strong> and press <strong>Save Time Entry</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a asp-area="" asp-controller="TimeTracker" asp-action="Create"
+                           class="btn" style="background-color: #c82333; color: white;">
+                            Go to Capture Timesheet
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Box 2 - With Visual Steps -->
+            <div class="col-md-4 mb-3">
+                <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
+                     style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
+
+                    <div>
+                        <div class="icon-container" style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px;">
+                            <img src="/assets/images/icon3.png" alt="Track Time Icon" class="img-fluid">
+                        </div>
+                        <h5 style="padding-right: 50px; margin-bottom: 20px;">Track Your Time</h5>
+                        <!-- Add the image here -->
+                        <div class="text-center mb-3">
+                            <img src="/assets/images/Home2.png" alt="Capture Your Time" class="box-image" >
+                        </div>
+                        <br />
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">1</span>
+                            <span>View your paginated time entries</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">2</span>
+                            <span>Use date filters to find specific periods</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">3</span>
+                            <span>Navigate between pages of records</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">4</span>
+                            <span>Generate reports from filtered data</span>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a asp-area="" asp-controller="TimeTracker" asp-action="Index"
+                           class="btn" style="background-color: #c82333; color: white;">
+                            Go to Track Your Time
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Box 3 - With Visual Steps -->
+            <div class="col-md-4 mb-3">
+                <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
+                     style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
+
+                    <div>
+                        <div class="icon-container" style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px;">
+                            <img src="/assets/images/icon2.png" alt="Reports Icon" class="img-fluid">
+                        </div>
+                        <h5 style="padding-right: 50px; margin-bottom: 20px;">Generate Weekly Reports</h5>
+                        <!-- Add the image here -->
+                        <div class="text-center mb-3">
+                            <img src="/assets/images/Home3.jpg" alt="Capture Your Time" class="box-image">
+                        </div>
+                        <br />
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">1</span>
+                            <span>Select a Monday-Friday workweek</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">2</span>
+                            <span>Filter to view your time entries</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">3</span>
+                            <span>Click the Generate Report button</span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">4</span>
+                            <span>Download your PDF report</span>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a asp-area="" asp-controller="TimeTracker" asp-action="Index"
+                           class="btn" style="background-color: #c82333; color: white;">
+                            Go to Generate Report
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* <!-- Welcome Modal -->
+<div class="modal fade" id="welcomeModal" tabindex="-1" role="dialog" aria-labelledby="welcomeModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="welcomeModalLabel">Welcome!</h5>
+            </div>
+            <div class="modal-body">
+                <p>You have successfully logged into PSS TYMSheet.</p>
+                <p>Welcome to the application first time user!</p>
+            </div>
+            <div class="modal-footer d-flex justify-content-end" id="actionArea">
+                <button type="button" class="btn" id="continueButton" style="background-color: #c82333; color: white;">Continue</button>
+                <!-- Spinner (hidden initially) -->
+                <div class="spinner-border ms-2" role="status" id="spinnerIcon" style="display: none; color: #c82333;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> *@
+
+<!-- No Supervisor Modal -->
+<div class="modal fade" id="noSupervisorModal" tabindex="-1" role="dialog" aria-labelledby="noSupervisorModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="noSupervisorModalLabel">Supervisor Not Found</h5>
+            </div>
+            <div class="modal-body">
+                <p>We couldn't find a supervisor assigned to you in Azure Active Directory.</p>
+                <p>Please contact your manager to have a supervisor assigned to your account.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn" id="goBackButton" style="background-color: #c82333; color: white;" data-bs-dismiss="modal">Go Back</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<style>
+    /* Add hover effect to the info boxes */
+    .info-box:hover {
+        transform: translateY(-5px); /* Move the box up slightly */
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1); /* Add shadow for depth */
+        border-color: #c82333 !important; /* Add red border */
+        cursor: pointer; /* Change cursor to indicate clickable */
+    }
+
+    /* Smooth transition for the button hover */
+    .info-box .btn:hover {
+        background-color: #a71d2a !important; /* Slightly darker red */
+        transition: background-color 0.3s ease;
+    }
+
+    .box-image {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        max-width: 100%;
+        max-height: 200px; /* Set your preferred max height */
+        width: auto; /* Let the image scale naturally */
+        height: auto;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+        object-fit: contain; /* Use 'contain' to avoid cropping, or 'cover' to crop */
+    }
+
+    body {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+    }
+</style>
+
+@section Scripts {
+    <script>
+        // Show Welcome Modal again when Go Back is pressed in No Supervisor Modal
+        $('#goBackButton').click(function () {
+            var welcomeModal = new bootstrap.Modal(document.getElementById('welcomeModal'), {
+                backdrop: 'static',
+                keyboard: false
+            });
+            welcomeModal.show();
+        });
+
+        $(document).ready(function () {
+            $('#spinnerIcon').hide();
+
+            // Show the welcome modal if flagged
+        @if (ViewBag.ShowWelcomePopup != null && (bool)ViewBag.ShowWelcomePopup)
+        {
+            <text>
+                        var welcomeModal = new bootstrap.Modal(document.getElementById('welcomeModal'), {
+                            backdrop: 'static',
+                            keyboard: false
+                        });
+                        welcomeModal.show();
+            </text>
+        }
+
+            // Handle Continue button click
+            $('#continueButton').click(function () {
+                $('#continueButton').hide();
+                $('#spinnerIcon').show();
+
+                $.ajax({
+                    url: '@Url.Action("LogUserDetails", "Home")',
+                    method: 'GET',
+                    success: function (response) {
+                        $.get('@Url.Action("CheckSupervisor", "Home")', function(data) {
+                            var welcomeModalEl = document.getElementById('welcomeModal');
+                            var welcomeModalInstance = bootstrap.Modal.getInstance(welcomeModalEl);
+                            welcomeModalInstance.hide();
+
+                            if (data.hasSupervisor === false) {
+                                var noSupervisorModal = new bootstrap.Modal(document.getElementById('noSupervisorModal'), {
+                                    backdrop: 'static',
+                                    keyboard: false
+                                });
+                                noSupervisorModal.show();
+                            }
+
+                            $('#continueButton').show();
+                            $('#spinnerIcon').hide();
+                        });
+                    },
+                    error: function (xhr, status, error) {
+                        $('#continueButton').show();
+                        $('#spinnerIcon').hide();
+                    }
+                });
+            });
+        });
+    </script>
+}

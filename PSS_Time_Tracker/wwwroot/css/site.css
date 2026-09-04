@@ -1,0 +1,130 @@
+
+/* Add this to your site.css file */
+.app-header .navbar {
+    background-color: #c82333 !important;
+    color: white !important;
+}
+
+    .app-header .navbar .navbar-nav > li > a {
+        color: white !important;
+    }
+
+        .app-header .navbar .navbar-nav > li > a:hover {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+
+    .app-header .navbar .navbar-text {
+        color: white !important;
+    }
+
+    /* Style the logout button specifically */
+    .app-header .navbar .btn-link {
+        color: white !important;
+        text-decoration: none !important;
+    }
+
+        .app-header .navbar .btn-link:hover {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+
+/* Style the notifications dropdown toggle */
+.nav-notifications-toggle {
+    background-color: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+/* Style the sidebar toggle button */
+.hide-sidebar-toggle-button {
+    color: white !important;
+}
+
+html {
+    font-size: 14px;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
+    margin-bottom: 60px;
+}
+
+/* Main sub-menu styling */
+.sub-menu {
+    list-style: none;
+    padding-left: 15px;
+}
+
+/* Parent items with children */
+.menu-item-has-children {
+    position: relative;
+}
+
+/* Sub-sub-menu styling */
+.sub-sub-menu {
+    display: none;
+    list-style: none;
+    padding-left: 20px;
+}
+
+/* Show sub-menu on hover */
+/* Remove hover-based styles */
+.menu-item-has-children:hover .sub-sub-menu {
+    display: none; /* Remove this line completely */
+}
+
+.menu-item-has-children:hover .submenu-arrow {
+    transform: none; /* Remove this line completely */
+}
+
+/* Add these new styles */
+.menu-item-has-children .sub-sub-menu {
+    display: none;
+}
+
+.menu-item-has-children.active .sub-sub-menu {
+    display: block;
+}
+
+.menu-item-has-children.active .submenu-arrow {
+    transform: rotate(90deg);
+}
+
+/* Style the parent links */
+.menu-item-has-children > a {
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Style all menu items */
+.sub-menu li a {
+    display: block;
+    padding: 5px 0;
+    color: #333;
+    text-decoration: none;
+}
+
+    .sub-menu li a:hover {
+        color: #007bff;
+    }
+
+/* Arrow transition */
+.material-icons.submenu-arrow {
+    transition: transform 0.3s ease;
+    font-size: 18px;
+    margin-left: 5px;
+    vertical-align: middle; /* This is often the magic fix */
+    position: relative;
+    top: -1px; /* Fine-tune pixel by pixel */
+}

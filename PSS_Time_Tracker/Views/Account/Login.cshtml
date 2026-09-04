@@ -1,0 +1,86 @@
+@using PSS_Time_Tracker.Models
+@model object
+@{
+    ViewData["Title"] = "Login";
+    Layout = null;
+    var users = ViewBag.Users as List<UserAccount> ?? new List<UserAccount>();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - TymSheet (local)</title>
+    <link href="~/assets/plugins/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 2.5rem;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .login-card h3 { color: #c82333; margin-bottom: 0.25rem; }
+        .login-card p.subtitle { color: #666; margin-bottom: 1.5rem; }
+        .btn-login {
+            background: #c82333; color: #fff; border: none; border-radius: 20px;
+            padding: 0.5rem 1.25rem; font-weight: 600;
+        }
+        .btn-login:hover { background: #a71d2a; color: #fff; }
+        .role-badge {
+            font-size: 0.75rem; padding: 0.15rem 0.5rem; border-radius: 10px;
+            margin-left: 0.5rem;
+        }
+        .role-employee { background: #e7f1ff; color: #0d6efd; }
+        .role-manager { background: #fde8ea; color: #c82333; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h3>TymSheet</h3>
+        <p class="subtitle">Local dev login &mdash; no Azure AD. Pick a seeded test account.</p>
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger py-2">
+                @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <div>@err.ErrorMessage</div>
+                }
+            </div>
+        }
+
+        <form method="post" asp-controller="Account" asp-action="Login">
+            <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+            <div class="mb-3">
+                <label class="form-label">Log in as</label>
+                <select name="azureAdUserId" class="form-select" required>
+                    <option value="" disabled selected>-- choose a test account --</option>
+                    @foreach (var u in users)
+                    {
+                        <option value="@u.AzureAdUserId">
+                            @(u.EmployeeName) @(u.EmployeeSurname) &mdash; @(u.JobTitle) @(u.IsManager ? "(Manager)" : "(Employee)")
+                        </option>
+                    }
+                </select>
+            </div>
+            <button type="submit" class="btn btn-login w-100">Log in</button>
+        </form>
+
+        <hr />
+        <small class="text-muted">
+            This screen replaces Azure AD sign-in for local development. On the original app
+            this page doesn't' exist &mdash; users are redirected to Microsoft's login page instead.
+        </small>
+    </div>
+</body>
+</html>

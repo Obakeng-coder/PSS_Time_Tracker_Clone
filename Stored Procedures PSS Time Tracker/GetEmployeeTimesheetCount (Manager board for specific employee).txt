@@ -1,0 +1,26 @@
+/*
+       This procedure returns the total count of timesheet entries
+       for a specified employee within an optional date range.
+       
+       Parameters:
+         @EmployeeId - The unique identifier (Azure AD User ID) of the employee.
+         @StartDate  - Optional start date filter.
+         @EndDate    - Optional end date filter.
+
+       Functionality:
+         - Counts how many entries exist in the TimeTracker table for the employee and date range.
+         - This count supports pagination by allowing calculation of total pages.
+*/
+
+CREATE PROCEDURE GetEmployeeTimesheetCount
+    @EmployeeId NVARCHAR(100),          -- The unique Azure AD user ID for the employee
+    @StartDate DATE = NULL,             -- Optional filter: only include entries on or after this date
+    @EndDate DATE = NULL                -- Optional filter: only include entries on or before this date
+AS
+BEGIN
+    SELECT COUNT(*)                     -- Return the total number of entries that match the criteria
+    FROM TimeTracker
+    WHERE AzureAdUserId = @EmployeeId                                -- Filter to only include records for the specified employee
+      AND (@StartDate IS NULL OR DateOfEntry >= @StartDate)          -- Apply start date filter if provided
+      AND (@EndDate IS NULL OR DateOfEntry <= @EndDate)              -- Apply end date filter if provided
+END

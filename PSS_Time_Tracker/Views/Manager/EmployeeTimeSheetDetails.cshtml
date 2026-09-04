@@ -1,0 +1,267 @@
+﻿@model List<TimeSheetRecorder.Models.TimeTrackerModel>
+
+@functions {
+    // Converts decimal hours (e.g., 7.63) to "7 Hours 38 Minutes"
+    public string FormatHours(double totalHours)
+    {
+        int hours = (int)totalHours;
+        int minutes = (int)Math.Round((totalHours - hours) * 60);
+        return $"{hours} Hours {minutes:D2} Minutes";
+    }
+}
+
+@{
+    ViewData["Title"] = $"Timesheet Details for {ViewBag.EmployeeName}";
+    int currentPage = ViewBag.CurrentPage ?? 1;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    bool hasPrevious = ViewBag.HasPrevious ?? false;
+    bool hasNext = ViewBag.HasNext ?? false;
+}
+
+<div class="row">
+    <div class="col">
+        <div class="card shadow-lg rounded-4 p-4 mt-4 mb-5 form-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">@ViewData["Title"]</h5>
+                <div>
+                    @if (ViewBag.ShowReportButton == true)
+                    {
+                        <button id="generateReportBtn" class="btn btn-success">Generate Weekly Report</button>
+                    }
+                    <a asp-action="Index" class="btn btn-secondary">Back to Employee List</a>
+                    <button id="toggleFilterBtn" class="btn btn-info" style="background-color: #c82333; border-color: #c82333; color: white;"
+                            onmouseover="this.style.backgroundColor='#a81d2b'"
+                            onmouseout="this.style.backgroundColor='#c82333'"
+                            onmousedown="this.style.backgroundColor='#8e1925'"
+                            onmouseup="this.style.backgroundColor='#a81d2b'">
+                        Hide Filter
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="card-body">
+                <!-- Date Filter Form -->
+                <div id="filterCard" class="row mb-3">
+                    <div class="col-md-12">
+                        <form asp-action="EmployeeTimeSheetDetails" method="get" class="form-inline">
+                            <input type="hidden" name="id" value="@ViewBag.EmployeeId" />
+                            <div class="form-group mr-2">
+                                <label for="startDate" class="mr-2">Start Date:</label>
+                                <input type="date" class="form-control" id="startDate" name="startDate"
+                                       value="@(ViewBag.StartDate ?? "")">
+                            </div>
+                            <div class="form-group mr-2">
+                                <label for="endDate" class="mr-2">End Date:</label>
+                                <input type="date" class="form-control" id="endDate" name="endDate"
+                                       value="@(ViewBag.EndDate ?? "")">
+                            </div>
+                            <br />
+                            <button type="submit" class="btn btn-primary mr-2" style="background-color: #c82333; border-color: #c82333;"
+                                    onmouseover="this.style.backgroundColor='#a81d2b'"
+                                    onmouseout="this.style.backgroundColor='#c82333'"
+                                    onmousedown="this.style.backgroundColor='#8e1925'"
+                                    onmouseup="this.style.backgroundColor='#a81d2b'">
+                                Filter
+                            </button>
+                            <a asp-action="EmployeeTimeSheetDetails" asp-route-id="@ViewBag.EmployeeId" class="btn btn-secondary">Reset</a>
+                        </form>
+                    </div>
+                </div>
+
+                @if (!Model.Any())
+                {
+                    <div class="alert alert-info" role="alert">
+                        <h4>No timesheet entries found.</h4>
+                        <p>There are no timesheet entries for the selected date range.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Host Company</th>
+                                <th>Start Time</th>
+                                <th>End Time</th>
+                                <th>Total Hours</th>
+                                <th>Tasks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in Model)
+                            {
+                                <tr>
+                                    <td>@entry.DateOfEntry.ToString("yyyy-MM-dd")</td>
+                                    <td>@entry.HostCompanyName</td>
+                                    <td>@entry.StartTime.ToString("HH:mm")</td>
+                                    <td>@entry.EndTime.ToString("HH:mm")</td>
+                                    <td>@FormatHours(entry.TotalHrsWorked)</td>
+                                    <td>
+                                        @foreach (var task in (entry.DailyTask ?? "").Split(';'))
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(task))
+                                            {
+                                                <div>@task.Trim()</div>
+                                            }
+                                        }
+                                    </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    </div>
+
+                    <!-- Pagination controls -->
+                    <nav aria-label="Timesheet pagination">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item @(!hasPrevious ? "disabled" : "")">
+                                <a class="page-link"
+                                   asp-action="EmployeeTimeSheetDetails"
+                                   asp-route-id="@ViewBag.EmployeeId"
+                                   asp-route-page="@(currentPage - 1)">Previous</a>
+                            </li>
+
+                            @for (int i = 1; i <= totalPages; i++)
+                            {
+                                <li class="page-item @(i == currentPage ? "active" : "")">
+                                    <a class="page-link"
+                                       asp-action="EmployeeTimeSheetDetails"
+                                       asp-route-id="@ViewBag.EmployeeId"
+                                       asp-route-page="@i"
+                                       style="color: #c82333;">@i</a>
+                                </li>
+                            }
+
+                            <li class="page-item @(!hasNext ? "disabled" : "")">
+                                <a class="page-link"
+                                   asp-action="EmployeeTimeSheetDetails"
+                                   asp-route-id="@ViewBag.EmployeeId"
+                                   asp-route-page="@(currentPage + 1)">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleFilterBtn = document.getElementById('toggleFilterBtn');
+            const filterCard = document.getElementById('filterCard');
+            const generateReportBtn = document.getElementById('generateReportBtn');
+
+            // Only proceed if these elements exist
+            if (toggleFilterBtn && filterCard) {
+                // Initialize button text based on localStorage
+                const filterVisible = localStorage.getItem('filterVisibleManagerDetails');
+                if (filterVisible === 'false') {
+                    filterCard.style.display = 'none';
+                    toggleFilterBtn.textContent = 'Show Filter';
+                } else {
+                    filterCard.style.display = 'block';
+                    toggleFilterBtn.textContent = 'Hide Filter';
+                }
+
+                toggleFilterBtn.addEventListener('click', function() {
+                    if (filterCard.style.display === 'none') {
+                        filterCard.style.display = 'block';
+                        toggleFilterBtn.textContent = 'Hide Filter';
+                        localStorage.setItem('filterVisibleManagerDetails', 'true');
+                    } else {
+                        filterCard.style.display = 'none';
+                        toggleFilterBtn.textContent = 'Show Filter';
+                        localStorage.setItem('filterVisibleManagerDetails', 'false');
+                    }
+                });
+            }
+
+            if (generateReportBtn) {
+                generateReportBtn.addEventListener('click', function() {
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+                    const employeeId = '@ViewBag.EmployeeId';
+
+                    // Submit form to generate PDF
+                    var form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/Manager/GenerateEmployeeWeeklyReport';
+
+                    // Add anti-forgery token
+                    var token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    var tokenInput = document.createElement('input');
+                    tokenInput.type = 'hidden';
+                    tokenInput.name = '__RequestVerificationToken';
+                    tokenInput.value = token;
+                    form.appendChild(tokenInput);
+
+                    var startDateInput = document.createElement('input');
+                    startDateInput.type = 'hidden';
+                    startDateInput.name = 'startDate';
+                    startDateInput.value = startDate;
+                    form.appendChild(startDateInput);
+
+                    var endDateInput = document.createElement('input');
+                    endDateInput.type = 'hidden';
+                    endDateInput.name = 'endDate';
+                    endDateInput.value = endDate;
+                    form.appendChild(endDateInput);
+
+                    var employeeIdInput = document.createElement('input');
+                    employeeIdInput.type = 'hidden';
+                    employeeIdInput.name = 'employeeId';
+                    employeeIdInput.value = employeeId;
+                    form.appendChild(employeeIdInput);
+
+                    document.body.appendChild(form);
+                    form.submit();
+                });
+            }
+        });
+    </script>
+}
+
+<style>
+
+    body {
+        min-height: 100vh;
+        width: 100vw;
+        background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+    }
+
+    .form-card {
+        max-width: 1250px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+
+    /* Responsive table container */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optional: Make table font smaller and reduce padding on small screens */
+@@media (max-width: 768px) {
+    .table thead th,
+    .table tbody td {
+        font-size: 0.95rem;
+        padding: 0.4rem 0.5rem;
+        white-space: nowrap;
+    }
+    .form-card {
+        padding: 0.5rem !important;
+    }
+}
+</style>

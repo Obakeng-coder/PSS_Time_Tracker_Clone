@@ -1,0 +1,6 @@
+﻿.custom-dotted-underline {
+    border-bottom: 2px dotted white !important; /* Ensures white takes priority */
+    width: 100px;
+    margin: 8px auto 16px auto; /* top, right/left, bottom */
+}
+

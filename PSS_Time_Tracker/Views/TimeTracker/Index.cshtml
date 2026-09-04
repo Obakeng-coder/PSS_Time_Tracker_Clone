@@ -1,0 +1,444 @@
+﻿@model IEnumerable<TimeSheetRecorder.Models.TimeTrackerModel>
+<link href="~/assets/css/custom.css" rel="stylesheet">
+@{
+    ViewData["Title"] = "My Timesheet Entries";
+    int currentPage = ViewBag.CurrentPage ?? 1;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    bool hasPrevious = ViewBag.HasPrevious ?? false;
+    bool hasNext = ViewBag.HasNext ?? false;
+    string startDate = ViewBag.StartDate;
+    string endDate = ViewBag.EndDate;
+
+    var userNameRaw = User.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
+    var userName = userNameRaw?.Split('|')[0].Trim();
+
+    @functions {
+        // Converts decimal hours (e.g., 7.63) to "7 Hours 38 Minutes"
+        public string FormatHours(double totalHours)
+        {
+            int hours = (int)totalHours;
+            int minutes = (int)Math.Round((totalHours - hours) * 60);
+            return $"{hours} Hrs {minutes:D2} Mins";
+        }
+    }
+}
+
+<div class="row">
+    <div class="col">
+        <div class="card shadow-lg rounded-4 p-4 mt-4 mb-5 form-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h5 class="card-title mb-0">@($"{userName ?? "User"}'s Timesheet Entries")</h5>
+                @if (User.Identity.IsAuthenticated)
+                {
+                    <div>
+                        @if (ViewBag.ShowReportButton == true)
+                        {
+                            <button id="generateReportBtn" class="btn btn-success mr-2">Generate Weekly Report</button>
+                        }
+                        <a asp-action="Create" class="btn btn-secondary">Add New Time Entry</a>
+
+                        <button id="toggleFilterBtn" class="btn btn-info" style="background-color: #c82333; border-color: #c82333; color: white;"
+                                onmouseover="this.style.backgroundColor='#a81d2b'"
+                                onmouseout="this.style.backgroundColor='#c82333'"
+                                onmousedown="this.style.backgroundColor='#8e1925'"
+                                onmouseup="this.style.backgroundColor='#a81d2b'">
+                            Hide Filter
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <div class="card-body">
+                @if (!User.Identity.IsAuthenticated)
+                {
+                    <div class="alert alert-info" role="alert">
+                        <h4>You are not logged in yet.</h4>
+                        <p>Please log in to view your timesheet data.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Date Filter Form -->
+                    <div id="filterCard" class="row mb-3">
+                        <div class="col-md-12">
+                            <form asp-action="Index" method="get" class="form-inline">
+                                <div class="form-group mr-2">
+                                    <label for="startDate" class="mr-2">Start Date:</label>
+                                    <input type="date" class="form-control" id="startDate" name="startDate"
+                                           value="@(ViewBag.StartDate ?? "")">
+                                </div>
+                                <div class="form-group mr-2">
+                                    <label for="endDate" class="mr-2">End Date:</label>
+                                    <input type="date" class="form-control" id="endDate" name="endDate"
+                                           value="@(ViewBag.EndDate ?? "")">
+                                </div>
+                                <input type="hidden" name="page" value="1" />
+                                <br />
+                              
+                                <button type="submit" class="btn btn-primary mr-2" style="background-color: #c82333; border-color: #c82333;"
+                                        onmouseover="this.style.backgroundColor='#a81d2b'"
+                                        onmouseout="this.style.backgroundColor='#c82333'"
+                                        onmousedown="this.style.backgroundColor='#8e1925'"
+                                        onmouseup="this.style.backgroundColor='#a81d2b'">
+                                    Filter
+                                </button>
+                                <a asp-action="Index" class="btn btn-secondary">Reset</a>
+                            </form>
+                        </div>
+                    </div>
+
+                    if (!Model.Any())
+                    {
+                        <div class="alert alert-info" role="alert">
+                            <h4>No timesheet entries found.</h4>
+                            <p>You don't have any timesheet entries.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <h2>My Timesheet Entries</h2>
+                        <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Employee Full Name</th>
+                                    @* <th>Supervisor</th> *@
+                                    <th>Host Company</th>
+                                    <th>Date Of Entry</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Total Hours Worked</th>
+                                    <th>Daily Task</th>
+                                    
+                                  
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in Model)
+                                {
+                                    <tr>
+                                        <td>@item.EmployeeName @item.EmployeeSurname</td>
+                                        @* <td>@item.SupervisorFullName</td> *@
+                                        <td>@item.HostCompanyName</td>
+                                        <td>@item.DateOfEntry.ToString("yyyy-MM-dd")</td>
+                                        <td>@item.StartTime.ToString("HH:mm")</td>
+                                        <td>@item.EndTime.ToString("HH:mm")</td>
+                                        <td>@FormatHours(item.TotalHrsWorked)</td>
+                                        <td>
+                                            @foreach (var task in (item.DailyTask ?? "").Split(';'))
+                                            {
+                                                if (!string.IsNullOrWhiteSpace(task))
+                                                {
+                                                    <div>@task.Trim()</div>
+                                                }
+                                            }
+                                        </td>
+                                                                       
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        </div>
+
+                        <!-- Pagination controls -->
+                        <nav aria-label="Timesheet pagination">
+                            <ul class="pagination justify-content-center">
+                                <li class="page-item @(!hasPrevious ? "disabled" : "")">
+                                    <a class="page-link"
+                                       asp-action="Index"
+                                       asp-route-page="@(currentPage - 1)"
+                                       asp-route-startDate="@startDate"
+                                       asp-route-endDate="@endDate">Previous</a>
+                                </li>
+
+                                @{
+                                    // Calculate the range of pages to show (5 at a time)
+                                    int startPage = Math.Max(1, currentPage - 2);
+                                    int endPage = Math.Min(totalPages, startPage + 4);
+
+                                    // Adjust if we're at the beginning or end
+                                    if (endPage - startPage < 4 && totalPages > 5)
+                                    {
+                                        if (currentPage < 3)
+                                        {
+                                            endPage = Math.Min(5, totalPages);
+                                        }
+                                        else if (currentPage > totalPages - 2)
+                                        {
+                                            startPage = Math.Max(1, totalPages - 4);
+                                        }
+                                    }
+
+                                    // Always show first page if not in current range
+                                    if (startPage > 1)
+                                    {
+                                        <li class="page-item @(1 == currentPage ? "active" : "")">
+                                            <a class="page-link"
+                                               asp-action="Index"
+                                               asp-route-page="1"
+                                               asp-route-startDate="@startDate"
+                                               asp-route-endDate="@endDate"
+                                               style="color: #c82333;">1</a>
+                                        </li>
+                                        if (startPage > 2)
+                                        {
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                        }
+                                    }
+
+                                    // Show the calculated page range
+                                    @for (int i = startPage; i <= endPage; i++)
+                                    {
+                                        <li class="page-item @(i == currentPage ? "active" : "")">
+                                            <a class="page-link"
+                                               asp-action="Index"
+                                               asp-route-page="@i"
+                                               asp-route-startDate="@startDate"
+                                               asp-route-endDate="@endDate"
+                                               style="color: #c82333;">@i</a>
+                                        </li>
+                                    }
+
+                                    // Always show last page if not in current range
+                                    if (endPage < totalPages)
+                                    {
+                                        if (endPage < totalPages - 1)
+                                        {
+                                            <li class="page-item disabled">
+                                                <span class="page-link">...</span>
+                                            </li>
+                                        }
+                                        <li class="page-item @(totalPages == currentPage ? "active" : "")">
+                                            <a class="page-link"
+                                               asp-action="Index"
+                                               asp-route-page="@totalPages"
+                                               asp-route-startDate="@startDate"
+                                               asp-route-endDate="@endDate"
+                                               style="color: #c82333;">@totalPages</a>
+                                        </li>
+                                    }
+                                }
+
+                                <li class="page-item @(!hasNext ? "disabled" : "")">
+                                    <a class="page-link"
+                                       asp-action="Index"
+                                       asp-route-page="@(currentPage + 1)"
+                                       asp-route-startDate="@startDate"
+                                       asp-route-endDate="@endDate">Next</a>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Signature Modal -->
+<div class="modal fade" id="signatureModal" tabindex="-1" role="dialog" aria-labelledby="signatureModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="signatureModalLabel">Add Your Signature</h5>
+            </div>
+            <div class="modal-body">
+                <form id="signatureForm">
+                    <div class="form-group">
+                        <label for="signatureInput">Type your name to create a signature (max 13 characters):</label>
+                        <input type="text" class="form-control" id="signatureInput" maxlength="13" required>
+                        <small class="form-text text-muted" style="display: flex; justify-content: flex-end;">
+                            <span id="signatureCharCount">0</span>/13 characters
+                        </small>
+                    </div>
+                    <div class="signature-preview">
+                        <p>Signature Preview:</p>
+                        <div id="signaturePreview" style="font-family: 'Whisper', cursive; font-size: 40px; min-height: 50px; border-bottom: 1px solid #ccc; padding-bottom: 5px;"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSignature" style="background-color: #c82333 !important; color: white !important; border-color: #c82333 !important;">Use Signature</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <script>
+         $(document).ready(function() {
+        // Initialize character count for signature input
+        function updateSignatureCharCount() {
+            const charCount = $('#signatureInput').val().length;
+            $('#signatureCharCount').text(charCount);
+            
+            // Change color when approaching limit (same as your daily task implementation)
+            const counter = $('#signatureCharCount');
+            if (charCount > 10) {  // Change color when 3 characters remain (13-10)
+                counter.addClass('text-danger');
+            } else {
+                counter.removeClass('text-danger');
+            }
+        }
+
+        // Update character count and preview in real-time
+        $('#signatureInput').on('input', function() {
+            updateSignatureCharCount();
+            $('#signaturePreview').text($(this).val());
+        });
+
+        // Initialize on modal show
+        $('#signatureModal').on('shown.bs.modal', function() {
+            updateSignatureCharCount();
+        });
+    });
+
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleFilterBtn = document.getElementById('toggleFilterBtn');
+            const filterCard = document.getElementById('filterCard');
+            const generateReportBtn = document.getElementById('generateReportBtn');
+            const signatureModal = new bootstrap.Modal(document.getElementById('signatureModal'));
+            const signatureInput = document.getElementById('signatureInput');
+            const signaturePreview = document.getElementById('signaturePreview');
+            const confirmSignature = document.getElementById('confirmSignature');
+
+            // Filter toggle logic (unchanged)
+            if (toggleFilterBtn && filterCard) {
+                const filterVisible = localStorage.getItem('filterVisibleTimesheet');
+                if (filterVisible === 'false') {
+                    filterCard.style.display = 'none';
+                    toggleFilterBtn.textContent = 'Show Filter';
+                } else {
+                    filterCard.style.display = 'block';
+                    toggleFilterBtn.textContent = 'Hide Filter';
+                }
+
+                toggleFilterBtn.addEventListener('click', function() {
+                    if (filterCard.style.display === 'none') {
+                        filterCard.style.display = 'block';
+                        toggleFilterBtn.textContent = 'Hide Filter';
+                        localStorage.setItem('filterVisibleTimesheet', 'true');
+                    } else {
+                        filterCard.style.display = 'none';
+                        toggleFilterBtn.textContent = 'Show Filter';
+                        localStorage.setItem('filterVisibleTimesheet', 'false');
+                    }
+                });
+            }
+
+            // Show modal on button click
+            if (generateReportBtn) {
+                generateReportBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    if (signatureInput) signatureInput.value = '';
+                    if (signaturePreview) signaturePreview.textContent = '';
+                    signatureModal.show();
+                });
+            }
+
+            // Live signature preview
+            if (signatureInput && signaturePreview) {
+                signatureInput.addEventListener('input', function() {
+                    signaturePreview.textContent = signatureInput.value;
+                });
+            }
+
+            // Handle signature confirmation (you can add PDF generation logic here)
+            if (confirmSignature) {
+                confirmSignature.addEventListener('click', function() {
+                    if (!signatureInput.value.trim()) {
+                        signatureInput.classList.add('is-invalid');
+                        return;
+                    }
+                    signatureInput.classList.remove('is-invalid');
+                    signatureModal.hide();
+
+                  
+                    // For now, just alert the signature
+                    // alert('Signature: ' + signatureInput.value);
+
+                    // Example: Submit the form as before, but include the signature
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
+
+                    var form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/TimeTracker/GenerateWeeklyReport';
+
+                    // Add anti-forgery token
+                    var token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    var tokenInput = document.createElement('input');
+                    tokenInput.type = 'hidden';
+                    tokenInput.name = '__RequestVerificationToken';
+                    tokenInput.value = token;
+                    form.appendChild(tokenInput);
+
+                    var startDateInput = document.createElement('input');
+                    startDateInput.type = 'hidden';
+                    startDateInput.name = 'startDate';
+                    startDateInput.value = startDate;
+                    form.appendChild(startDateInput);
+
+                    var endDateInput = document.createElement('input');
+                    endDateInput.type = 'hidden';
+                    endDateInput.name = 'endDate';
+                    endDateInput.value = endDate;
+                    form.appendChild(endDateInput);
+
+                    var signatureField = document.createElement('input');
+                    signatureField.type = 'hidden';
+                    signatureField.name = 'signature';
+                    signatureField.value = signatureInput.value;
+                    form.appendChild(signatureField);
+
+                    document.body.appendChild(form);
+                    form.submit();
+                });
+            }
+        });
+    </script>
+}
+
+<style>
+    body {
+        min-height: 100vh;
+        width: 100vw;
+        background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+    }
+
+    .form-card {
+        max-width: 1250px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+
+    /* Responsive table container */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Optional: Make table font smaller and reduce padding on small screens */
+@@media (max-width: 768px) {
+    .table thead th,
+    .table tbody td {
+        font-size: 0.95rem;
+        padding: 0.4rem 0.5rem;
+        white-space: nowrap;
+    }
+    .form-card {
+        padding: 0.5rem !important;
+    }
+}
+</style>

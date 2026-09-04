@@ -1,0 +1,43 @@
+/*
+       ----------------------------------------
+       This procedure retrieves a paginated list of timesheet entries
+       for a specified employee within an optional date range.
+       
+       Parameters:
+         @EmployeeId - The unique identifier (Azure AD User ID) of the employee.
+         @StartDate  - Optional start date filter to include entries on or after this date.
+         @EndDate    - Optional end date filter to include entries on or before this date.
+         @PageNumber - The current page number (for pagination).
+         @PageSize   - The number of records to return per page.
+
+       Functionality:
+         - Filters the TimeTracker table for the given employee and date range.
+         - Uses ROW_NUMBER() to assign row numbers to entries ordered by DateOfEntry descending.
+         - Returns only the rows that belong to the requested page based on PageNumber and PageSize.
+         - Ensures efficient pagination by limiting results directly at the database level.
+         - Orders results by the most recent DateOfEntry first.
+*/
+
+CREATE PROCEDURE GetEmployeeTimesheetPaged
+    @EmployeeId NVARCHAR(100),          -- The unique Azure AD user ID for the employee
+    @StartDate DATE = NULL,             -- Optional filter: only include entries on or after this date
+    @EndDate DATE = NULL,               -- Optional filter: only include entries on or before this date
+    @PageNumber INT,                    -- Current page number for pagination
+    @PageSize INT                       -- Number of records to return per page
+AS
+BEGIN
+    SET NOCOUNT ON;                     -- Prevents extra result sets from interfering with the output (improves performance and avoids issues in some apps)
+
+    SELECT *
+    FROM (
+        SELECT *, 
+               ROW_NUMBER() OVER (ORDER BY DateOfEntry DESC) AS RowNum  -- Assigns a unique row number to each row, ordered by most recent DateOfEntry first
+        FROM TimeTracker
+        WHERE AzureAdUserId = @EmployeeId                                -- Filter to only include records for the specified employee
+          AND (@StartDate IS NULL OR DateOfEntry >= @StartDate)         -- Apply start date filter if provided
+          AND (@EndDate IS NULL OR DateOfEntry <= @EndDate)             -- Apply end date filter if provided
+    ) AS Filtered
+    WHERE RowNum BETWEEN (@PageNumber - 1) * @PageSize + 1              -- Skip rows before the current page
+                    AND @PageNumber * @PageSize                         -- Include only the number of rows for this page
+    ORDER BY DateOfEntry DESC;                                          -- Final ordering of results (most recent first)
+END

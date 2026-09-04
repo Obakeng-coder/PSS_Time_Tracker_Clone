@@ -1,0 +1,74 @@
+
+
+@font-face {
+    font-family: 'Whisper';
+    src: url('/Whisper-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
+.navbar-text {
+    line-height: 1.5; /* Ensure consistent line height */
+    vertical-align: middle; /* Align elements vertically */
+    display: inline-block; /* Ensure both are inline-block */
+    margin: 0; /* Remove any extra margin */
+    padding: 0; /* Remove any extra padding */
+    margin-top: 10px; /* Adjust this value to lower both elements */
+    margin-right: 30px !important;
+     /* Increase spacing between name and button */
+}
+
+
+.table thead th {
+    background-color: #c82333; /* Set background color */
+    color: white; /* Ensure text is readable */
+    border: 1px solid black; /* Add black border */
+    text-align: center; /* Optional: Center-align text */
+}
+
+.alert.alert-info {
+    background-color: #c82333 !important; /* Set the background color */
+    color: white !important; /* Ensure the text is white */
+    border-color: #c82333 !important; /* Match the border color to the background */
+}
+
+
+.btn-red {
+    background-color: #c82333;
+    border-color: #bd2130;
+    color: white; /* Ensure text is readable */
+}
+
+.btn-custom-red {
+    background-color: #c82333;
+    border-color: #c82333;
+    color: white;
+}
+
+    .btn-custom-red:hover {
+        background-color: #a81d2b;
+        border-color: #a11a28;
+    }
+
+    .btn-custom-red:active {
+        background-color: #8e1925;
+        border-color: #841723;
+    }
+
+#notificationsDropDown {
+    background-color: #c82333;
+    color: white !important;
+    border-radius: 50%;
+    padding: 6px 14px;
+    font-weight: bold;
+    display: inline-block;
+    text-align: center;
+    min-width: 24px;
+}
+
+/* Custom notification number color override */
+#notificationsDropDown {
+    color: white !important;
+    font-weight: bold;
+}
