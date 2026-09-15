@@ -24,14 +24,30 @@
     {
         pageTitle = "Approve Employees";
     }
-    else if (currentController == "HostCompanies")
+    else if (currentController == "Leave" && currentAction == "Create")
     {
-        pageTitle = "Host Companies";
+        pageTitle = "Request Time Off";
+    }
+    else if (currentController == "Leave" && currentAction == "Index")
+    {
+        pageTitle = "My Time Off";
+    }
+    else if (currentController == "LeaveApproval")
+    {
+        pageTitle = "Approve Time Off";
+    }
+    else if (currentController == "HrApproval")
+    {
+        pageTitle = "HR Board";
     }
 
     // NEW: Determine if user is in the Manager group
     var managerGroupId = Configuration["ManagerGroupId"] ?? "local-managers";
     bool isManager = User.Claims.Any(c => c.Value == managerGroupId);
+
+    // Separate from isManager - see UserAccount.IsHr / the RequireHrRole policy.
+    var hrGroupId = Configuration["HrGroupId"] ?? "local-hr";
+    bool isHr = User.Claims.Any(c => c.Value == hrGroupId);
 }
 
 <!DOCTYPE html>
@@ -54,7 +70,7 @@
 
     <!-- Theme Styles -->
     <link href="~/assets/css/main.min.css" rel="stylesheet">
-    <link href="~/assets/css/custom.css" rel="stylesheet">
+    <link href="~/assets/css/custom.css" asp-append-version="true" rel="stylesheet">
 
     @* <link href="~/css/site.css" rel="stylesheet"> *@
 
@@ -100,6 +116,18 @@
                                 Track Your Time
                             </a>
                         </li>
+                        <li class="@(currentController == "Leave" && currentAction == "Create" ? "active" : "")">
+                            <a asp-area="" asp-controller="Leave" asp-action="Create">
+                                <img src="~/assets/images/icon5.png" alt="Icon" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle;" />
+                                Request Time Off
+                            </a>
+                        </li>
+                        <li class="@(currentController == "Leave" && currentAction == "Index" ? "active" : "")">
+                            <a asp-area="" asp-controller="Leave" asp-action="Index">
+                                <img src="~/assets/images/icon4.png" alt="Icon" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle;" />
+                                My Time Off
+                            </a>
+                        </li>
                     }
                     else
                     {
@@ -136,10 +164,25 @@
                                 <li class="@(currentController == "Admin_Approve_Employee" && currentAction == "Index" ? "active" : "")">
                                     <a asp-area="" asp-controller="Admin_Approve_Employee" asp-action="Index">Approve Employees</a>
                                 </li>
-                                <li class="@(currentController == "HostCompanies" && currentAction == "Index" ? "active" : "")">
-                                    <a asp-area="" asp-controller="HostCompanies" asp-action="Index">Host Companies</a>
+                                <li class="@(currentController == "LeaveApproval" ? "active" : "")">
+                                    <a asp-area="" asp-controller="LeaveApproval" asp-action="Index">Approve Time Off</a>
                                 </li>
                             </ul>
+                        </li>
+                    }
+
+                    @* Separate from the Manager section above - a user can be HR without being a
+                       manager, or a manager without being HR. See UserAccount.IsHr. *@
+                    @if (isHr == true)
+                    {
+                        <li class="sidebar-title">
+                            HR Privileges
+                        </li>
+                        <li class="@(currentController == "HrApproval" ? "active" : "")">
+                            <a asp-area="" asp-controller="HrApproval" asp-action="Index">
+                                <img src="~/assets/images/icon6.png" alt="Icon" style="width: 20px; height: 20px; margin-right: 8px; vertical-align: middle;" />
+                                HR Board
+                            </a>
                         </li>
                     }
                 </ul>
@@ -170,55 +213,9 @@
                     <span class="custom-navbar-page-title">@pageTitle</span>
                 </div>
                 <div class="custom-navbar-right">
-                    <div class="custom-navbar-notifications">
-                        <div class="custom-navbar-dropdown" id="customNotificationsDropdownMenu" style="display:none;">
-                            <div class="custom-navbar-dropdown-header">Notifications</div>
-                            <div class="custom-navbar-dropdown-list">
-                                <div class="custom-navbar-dropdown-item">
-                                    <div class="notifications-dropdown-item-image">
-                                        <span class="notifications-badge bg-danger text-white">
-                                            <i class="material-icons-outlined">alarm</i>
-                                        </span>
-                                    </div>
-                                    <div class="notifications-dropdown-item-text">
-                                        <p class="bold-notifications-text">Reminder: Ensure all weekly timesheets have been submitted every Friday before the end of the day.</p>
-                                    </div>
-                                </div>
-                                <div class="custom-navbar-dropdown-item">
-                                    <div class="notifications-dropdown-item-image">
-                                        <span class="notifications-badge bg-warning text-white">
-                                            <i class="material-icons-outlined">error_outline</i>
-                                        </span>
-                                    </div>
-                                    <div class="notifications-dropdown-item-text">
-                                        <p class="bold-notifications-text">If you’ve missed a timesheet entry for last week. Admin approval is required to enter data for the current week.</p>
-                                    </div>
-                                </div>
-                                <div class="custom-navbar-dropdown-item">
-                                    <div class="notifications-dropdown-item-image">
-                                        <span class="notifications-badge bg-info text-white">
-                                            <i class="material-icons-outlined">business</i>
-                                        </span>
-                                    </div>
-                                    <div class="notifications-dropdown-item-text">
-                                        <p class="bold-notifications-text">Worked for multiple Host Companies today? Check the box and select all applicable companies from the dropdown.</p>
-                                    </div>
-                                </div>
-                                <div class="custom-navbar-dropdown-item">
-                                    <div class="notifications-dropdown-item-image">
-                                        <span class="notifications-badge bg-success text-white">
-                                            <i class="material-icons-outlined">event</i>
-                                        </span>
-                                    </div>
-                                    <div class="notifications-dropdown-item-text">
-                                        <p class="bold-notifications-text">If today is a public holiday and you're not working, check the "Is Today a Public Holiday?" box and choose the date of the public holiday and hit save.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                     @if (User.Identity?.IsAuthenticated ?? false)
                     {
+                        @await Component.InvokeAsync("NotificationBell")
                         <span class="custom-navbar-user">Hello, @User.Claims.FirstOrDefault(c => c.Type == "name")?.Value</span>
                         <form method="post" asp-controller="Account" asp-action="SignOut" style="display:inline;">
                             <button type="submit" class="custom-navbar-btn">Logout</button>
@@ -235,6 +232,8 @@
                     <ul>
                         <li><a asp-controller="TimeTracker" asp-action="Create">Capture Your Timesheet</a></li>
                         <li><a asp-controller="TimeTracker" asp-action="Index">Track Your Time</a></li>
+                        <li><a asp-controller="Leave" asp-action="Create">Request Time Off</a></li>
+                        <li><a asp-controller="Leave" asp-action="Index">My Time Off</a></li>
                         @* Show Manager Board in mobile menu ONLY if manager *@
                         @if (isManager == true)
                         {
@@ -243,7 +242,14 @@
                             </li>
                             <li><a asp-controller="Manager" asp-action="Index">Employee Timesheets</a></li>
                             <li><a asp-controller="Admin_Approve_Employee" asp-action="Index">Approve Employees</a></li>
-                            <li><a asp-controller="HostCompanies" asp-action="Index">Host Companies</a></li>
+                            <li><a asp-controller="LeaveApproval" asp-action="Index">Approve Time Off</a></li>
+                        }
+                        @if (isHr == true)
+                        {
+                            <li style="padding: 0.75rem 1.5rem 0.25rem 1.5rem; text-align:left; font-weight:700; color:#c82333; font-size:1.1rem; background:#f8f9fa; border-top:1px solid #eee;">
+                                HR Privileges
+                            </li>
+                            <li><a asp-controller="HrApproval" asp-action="Index">HR Board</a></li>
                         }
                         @if (User.Identity?.IsAuthenticated ?? false)
                         {
@@ -488,7 +494,23 @@
                 display: flex;
             }
 
-            .custom-navbar-right, .app-sidebar {
+            /* .custom-navbar-right stays visible so the notification bell (which lives inside it)
+               still shows on mobile/tablet - it was previously display:none entirely here, hiding the
+               bell along with everything else. Only the greeting text and the desktop Logout
+               button/Login link are hidden below - both are already duplicated in .mobile-menu. */
+            .custom-navbar-right {
+                display: flex !important;
+                align-items: center;
+                gap: 0;
+            }
+
+                .custom-navbar-right .custom-navbar-user,
+                .custom-navbar-right form,
+                .custom-navbar-right > a.custom-navbar-link {
+                    display: none !important;
+                }
+
+            .app-sidebar {
                 display: none !important;
             }
 

@@ -5,14 +5,14 @@ namespace PSS_Time_Tracker
 {
     public class AnnotatedCellEvent : IPdfPCellEvent
     {
-        private readonly PdfWriter _writer;
+        private readonly PdfWriter _writer; 
         private readonly PdfAnnotation _annotation;
 
         public AnnotatedCellEvent(PdfWriter writer, PdfAnnotation annotation)
         {
             _writer = writer;
             _annotation = annotation;
-        }
+        } 
 
         public void CellLayout(PdfPCell cell, Rectangle position, PdfContentByte[] canvases)
         {
@@ -22,7 +22,7 @@ namespace PSS_Time_Tracker
           
             var annotationRect = new Rectangle(
                 position.Right - iconSize, 
-                position.Bottom,           
+                position.Bottom,            
                 position.Right,           
                 position.Bottom + iconSize 
             );

@@ -22,7 +22,7 @@
         <div class="row mt-4 gx-3">
 
             <!-- Box 1 - With Visual Steps -->
-            <div class="col-md-4 mb-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
                      style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
 
@@ -44,7 +44,7 @@
                         <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
                             <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
                  text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">2</span>
-                            <span>Enter your <strong>Host Company Name</strong> and <strong>Date of Entry</strong></span>
+                            <span>Choose your <strong>Work Location</strong> and <strong>Date of Entry</strong></span>
                         </div>
                         <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
                             <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
@@ -68,7 +68,7 @@
             </div>
 
             <!-- Box 2 - With Visual Steps -->
-            <div class="col-md-4 mb-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
                      style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
 
@@ -114,7 +114,7 @@
             </div>
 
             <!-- Box 3 - With Visual Steps -->
-            <div class="col-md-4 mb-3">
+            <div class="col-lg-3 col-md-6 mb-3">
                 <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
                      style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
 
@@ -154,6 +154,51 @@
                         <a asp-area="" asp-controller="TimeTracker" asp-action="Index"
                            class="btn" style="background-color: #c82333; color: white;">
                             Go to Generate Report
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Box 4 - With Visual Steps -->
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="info-box p-4 h-100 position-relative d-flex flex-column justify-content-between"
+                     style="background-color: #FFFFFF; border-radius: 8px; min-height: 200px; border: 2px solid transparent; transition: all 0.3s ease;">
+
+                    <div>
+                        <div class="icon-container" style="position: absolute; top: 15px; right: 15px; width: 40px; height: 40px;">
+                            <img src="/assets/images/icon6.png" alt="Time Off Icon" class="img-fluid">
+                        </div>
+                        <h5 style="padding-right: 50px; margin-bottom: 20px;">Request Time Off</h5>
+                        <div class="text-center mb-3">
+                            <img src="/assets/images/Home1.jpg" alt="Request Time Off" class="box-image">
+                        </div>
+                        <br />
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">1</span>
+                            <span>Choose a <strong>Leave Type</strong></span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">2</span>
+                            <span>Pick your <strong>date range</strong></span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">3</span>
+                            <span>Add a reason and <strong>sign</strong></span>
+                        </div>
+                        <div class="step" style="display: flex; align-items: flex-start;">
+                            <span style="background: #c82333; color: white; border-radius: 50%; width: 22px; height: 22px;
+                 text-align: center; line-height: 22px; font-size: 12px; margin-right: 8px;">4</span>
+                            <span>Submit for <strong>manager approval</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a asp-area="" asp-controller="Leave" asp-action="Create"
+                           class="btn" style="background-color: #c82333; color: white;">
+                            Go to Request Time Off
                         </a>
                     </div>
                 </div>

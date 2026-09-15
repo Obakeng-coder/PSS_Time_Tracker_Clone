@@ -1,0 +1,112 @@
+@using PSS_Time_Tracker.Models
+@model List<Notification>
+@{
+    int unreadCount = ViewBag.UnreadCount ?? 0;
+
+    (string Icon, string CssClass) IconFor(NotificationType type) => type switch
+    {
+        NotificationType.LeaveRequestSubmitted => ("event_note", "type-leave"),
+        NotificationType.LeaveRequestDecision => ("check_circle", "type-decision"),
+        NotificationType.TimesheetGapFlagged => ("warning", "type-gap"),
+        NotificationType.GapResolutionPendingConfirmation => ("fact_check", "type-pending"),
+        _ => ("notifications", "type-default")
+    };
+
+    string RelativeTime(DateTime dt)
+    {
+        var span = DateTime.Now - dt;
+        if (span.TotalSeconds < 60) return "Just now";
+        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
+        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalDays < 7) return $"{(int)span.TotalDays}d ago";
+        return dt.ToString("MMM d");
+    }
+}
+
+<!-- Dimmed/blurred backdrop behind the notification panel, shown only while it's open (see the
+     shown.bs.dropdown/hidden.bs.dropdown wiring below) - click it to close, same as a modal backdrop. -->
+<div id="notificationBackdrop" class="notification-backdrop" hidden></div>
+
+<div class="dropdown custom-navbar-notifications">
+    <button type="button" id="notificationBellBtn" class="notification-bell-btn" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="material-icons-outlined">notifications</i>
+        @if (unreadCount > 0)
+        {
+            <span class="notification-bell-badge">@(unreadCount > 9 ? "9+" : unreadCount.ToString())</span>
+        }
+    </button>
+
+    <!-- Standard Bootstrap dropdown-menu (bootstrap.min.js, already loaded, handles positioning,
+         opening/closing, outside-click and Escape for us). -->
+    <div class="dropdown-menu dropdown-menu-end notifications-dropdown p-0" aria-labelledby="notificationBellBtn">
+        <div class="notifications-dropdown-header">
+            <span>Notifications</span>
+            <div class="d-flex align-items-center gap-3">
+                @if (unreadCount > 0)
+                {
+                    <form asp-controller="Notifications" asp-action="MarkAllRead" method="post" class="m-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="notifications-mark-all-read">Mark all read</button>
+                    </form>
+                }
+                <button type="button" class="notifications-close-btn" id="notificationCloseBtn" aria-label="Close">
+                    <i class="material-icons-outlined">close</i>
+                </button>
+            </div>
+        </div>
+        <div class="notifications-dropdown-list">
+            @if (!Model.Any())
+            {
+                <div class="notifications-empty">
+                    <i class="material-icons-outlined">notifications_none</i>
+                    <p>You're all caught up</p>
+                </div>
+            }
+            @foreach (var n in Model)
+            {
+                var (icon, cssClass) = IconFor(n.Type);
+                <a asp-controller="Notifications" asp-action="Open" asp-route-id="@n.Id" asp-route-url="@n.Url"
+                   class="notifications-dropdown-item @(n.IsRead ? "" : "is-unread")">
+                    <span class="notifications-badge @cssClass">
+                        <i class="material-icons-outlined">@icon</i>
+                    </span>
+                    <span class="notifications-dropdown-item-text">
+                        <span class="notifications-item-title">@n.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(n.Message))
+                        {
+                            <span class="notifications-dropdown-item-message">@n.Message</span>
+                        }
+                        <span class="notifications-item-time">@RelativeTime(n.CreatedDate)</span>
+                    </span>
+                    @if (!n.IsRead)
+                    {
+                        <span class="notifications-unread-dot" aria-hidden="true"></span>
+                    }
+                </a>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var toggleBtn = document.getElementById('notificationBellBtn');
+        var backdrop = document.getElementById('notificationBackdrop');
+        var closeBtn = document.getElementById('notificationCloseBtn');
+        if (!toggleBtn || !backdrop) { return; }
+
+        function closeDropdown() {
+            var instance = bootstrap.Dropdown.getInstance(toggleBtn);
+            if (instance) { instance.hide(); }
+        }
+
+        // Bootstrap's own dropdown lifecycle events - backdrop follows the panel's real open/closed
+        // state exactly (works the same whether it was opened by click, keyboard, or closed via
+        // Escape/outside-click, not just the paths this file adds its own handlers for).
+        toggleBtn.addEventListener('shown.bs.dropdown', function () { backdrop.hidden = false; });
+        toggleBtn.addEventListener('hidden.bs.dropdown', function () { backdrop.hidden = true; });
+
+        backdrop.addEventListener('click', closeDropdown);
+        if (closeBtn) { closeBtn.addEventListener('click', closeDropdown); }
+    })();
+</script>

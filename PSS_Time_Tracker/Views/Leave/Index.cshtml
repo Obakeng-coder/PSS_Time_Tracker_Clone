@@ -1,0 +1,163 @@
+@model IEnumerable<LeaveRequest>
+@using PSS_Time_Tracker.Models
+@{
+    ViewData["Title"] = "My Time Off";
+    int currentPage = ViewBag.CurrentPage ?? 1;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    bool hasPrevious = ViewBag.HasPrevious ?? false;
+    bool hasNext = ViewBag.HasNext ?? false;
+    var balances = ViewBag.Balances as List<LeaveBalance> ?? new List<LeaveBalance>();
+}
+
+<div class="row">
+    <div class="col">
+        @if (TempData["SuccessMessage"] != null)
+        {
+            <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+        }
+        @if (TempData["ErrorMessage"] != null)
+        {
+            <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+        }
+
+        <div class="card shadow-lg rounded-4 p-4 mt-4 mb-4 form-card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Leave Balance (@DateTime.Today.Year)</h5>
+            </div>
+            <div class="card-body">
+                @{
+                    string? maternityLeave = ViewBag.MaternityLeave as string;
+                    string? paternityLeave = ViewBag.PaternityLeave as string;
+                    bool hasAnyBalanceData = balances.Any() || !string.IsNullOrWhiteSpace(maternityLeave) || !string.IsNullOrWhiteSpace(paternityLeave);
+                }
+                @if (!hasAnyBalanceData)
+                {
+                    <p class="text-muted mb-0">No balance data yet.</p>
+                }
+                else
+                {
+                    <div class="row g-3">
+                        @foreach (var b in balances)
+                        {
+                            bool isUnpaid = string.Equals(b.LeaveType?.Name, "Unpaid", StringComparison.OrdinalIgnoreCase);
+                            <div class="col-md-3 col-6">
+                                <div class="p-3 rounded-3 h-100" style="background:#f8f9fa; border-left: 4px solid @(b.LeaveType?.ColorHex ?? "#c82333");">
+                                    <div class="fw-bold">@(b.LeaveType?.Name ?? "-")</div>
+                                    @if (isUnpaid)
+                                    {
+                                        <div class="text-muted small">Used: @b.UsedDays</div>
+                                        <div class="fs-5">Unlimited</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small">Accrued: @b.AccruedDays &middot; Used: @b.UsedDays</div>
+                                        <div class="fs-5">@b.RemainingDays days left</div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(maternityLeave))
+                        {
+                            <div class="col-md-3 col-6">
+                                <div class="p-3 rounded-3 h-100" style="background:#f8f9fa; border-left: 4px solid #bf8700;">
+                                    <div class="fw-bold">Maternity Leave</div>
+                                    <div class="fs-5">@maternityLeave</div>
+                                </div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(paternityLeave))
+                        {
+                            <div class="col-md-3 col-6">
+                                <div class="p-3 rounded-3 h-100" style="background:#f8f9fa; border-left: 4px solid #bf8700;">
+                                    <div class="fw-bold">Paternity Leave</div>
+                                    <div class="fs-5">@paternityLeave</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-lg rounded-4 p-4 mb-5 form-card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">My Time Off Requests</h5>
+                <a asp-controller="Leave" asp-action="Create" class="btn" style="background-color:#c82333; color:white;">Request Time Off</a>
+            </div>
+            <div class="card-body">
+                @if (!Model.Any())
+                {
+                    <div class="alert alert-info">You haven't requested any time off yet.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Leave Type</th>
+                                    <th>Start</th>
+                                    <th>End</th>
+                                    <th>Days</th>
+                                    <th>Status</th>
+                                    <th>Manager</th>
+                                    <th>HR</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var lr in Model)
+                                {
+                                    <tr>
+                                        <td>@(lr.LeaveType?.Name ?? "-")@(string.IsNullOrWhiteSpace(lr.OtherLeaveDescription) ? "" : $" ({lr.OtherLeaveDescription})")</td>
+                                        <td>@lr.StartDate.ToString("yyyy-MM-dd")</td>
+                                        <td>@lr.EndDate.ToString("yyyy-MM-dd")</td>
+                                        <td>@lr.TotalDays</td>
+                                        <td><span class="badge" style="background-color: #c82333; color: white;">@lr.Status</span></td>
+                                        <td>@(lr.ManagerRecommendation == ManagerRecommendation.None ? "-" : lr.ManagerRecommendation.ToString())</td>
+                                        <td>@(lr.HrDecision == HrDecisionType.None ? "-" : lr.HrDecision.ToString())</td>
+                                        <td>
+                                            @if (lr.Status == LeaveRequestStatus.PendingManager || lr.Status == LeaveRequestStatus.PendingHR || lr.Status == LeaveRequestStatus.PendingPayrollCapture)
+                                            {
+                                                <form asp-action="Cancel" asp-route-id="@lr.Id" method="post" class="d-inline" onsubmit="return confirm('Withdraw this leave request?');">
+                                                    @Html.AntiForgeryToken()
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Withdraw</button>
+                                                </form>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <nav class="mt-3">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item @(!hasPrevious ? "disabled" : "")">
+                                <a class="page-link" asp-action="Index" asp-route-page="@(currentPage - 1)">Previous</a>
+                            </li>
+                            <li class="page-item disabled"><span class="page-link">Page @currentPage of @Math.Max(totalPages, 1)</span></li>
+                            <li class="page-item @(!hasNext ? "disabled" : "")">
+                                <a class="page-link" asp-action="Index" asp-route-page="@(currentPage + 1)">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    body {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #c82333 30%, #fff 100%);
+        background-attachment: fixed;
+    }
+
+    .form-card {
+        max-width: 1100px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+</style>

@@ -1,4 +1,4 @@
-﻿@model TimeSheetRecorder.Models.ViewModels.TimeTrackerViewModel
+@model TimeSheetRecorder.Models.ViewModels.TimeTrackerViewModel
 
 @{
     ViewData["Title"] = "Log Time Entry";
@@ -11,16 +11,20 @@
         Log Your Time: @(userName ?? "User")
     </h3>
     <div class="card-body">
+        @if (!Model.HasSharePointCheckIn)
+        {
+            <div class="alert alert-warning">
+                No check-in/check-out record found in SharePoint for today yet. Check in via the mobile
+                app first - Start Time, End Time, and Total Hours below will fill in automatically once
+                that record exists.
+            </div>
+        }
+
         <form asp-action="Create" method="post" id="timeEntryForm">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
             <input type="hidden" asp-for="AzureAdUserId" />
-
-            <!-- Hidden fields to always submit HostCompanyName and DailyTask -->
-            <input type="hidden" asp-for="HostCompanyName" id="HostCompanyNameHidden" />
-            <input type="hidden" asp-for="DailyTask" id="DailyTaskHidden" />
-
 
             <div class="row g-3">
                 <div class="col-md-6">
@@ -50,88 +54,78 @@
                 </div>
 
                 <div class="col-md-6">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label mb-0">Host Company Name</label>
-                        <div class="form-check">
-                            <input class="form-check-input custom-red" type="checkbox" id="multiHostCheckbox" />
-                            <label class="form-check-label" for="multiHostCheckbox">
-                                Have you worked for multiple Host Companies today?
-                            </label>
-                        </div>
-                    </div>
-
-                    <div id="hostCompanySingle">
-                        <select asp-for="HostCompanyName" class="form-select" asp-items="@(new SelectList(Model.HostCompanyOptions))">
-                            <option value="">-- Select Host Company --</option>
-                        </select>
-                        <span asp-validation-for="HostCompanyName" class="text-danger"></span>
-                    </div>
-
-                    <div id="hostCompanyMultiple" style="display:none;">
-                        <select id="multiHostSelect" class="form-select">
-                            <option value="">-- Select Host Company --</option>
-                            @foreach (var company in Model.HostCompanyOptions)
-                            {
-                                <option value="@company">@company</option>
-                            }
-                        </select>
-                        <div id="selectedCompanies" class="mt-2">
-                            <!-- Selected companies will appear here -->
-                        </div>
-                        <!-- Hidden input to store selected companies as CSV -->
-                        <input type="hidden" name="SelectedHostCompanies" id="SelectedHostCompanies" />
-                    </div>
+                    <label asp-for="WorkLocation" class="form-label">Work Location</label>
+                    <input asp-for="WorkLocation" class="form-control" readonly placeholder="Pulled once you've checked in" />
+                    <span asp-validation-for="WorkLocation" class="text-danger"></span>
                 </div>
 
-
-
                 <div class="col-md-6">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <label asp-for="DateOfEntry" class="form-label mb-0">Date Of Entry</label>
-                        <div class="form-check d-flex align-items-center gap-1">
-                            <input asp-for="IsPublicHoliday" class="form-check-input custom-red" type="checkbox" id="IsPublicHoliday" />
-
-                            <label class="form-check-label" for="IsPublicHoliday">
-                                Is Today a Public Holiday?
-                            </label>
-                        </div>
-                    </div>
-                    <input asp-for="DateOfEntry" type="date" class="form-control" />
+                    <label asp-for="DateOfEntry" class="form-label">Date Of Entry</label>
+                    <input asp-for="DateOfEntry" type="date" class="form-control" id="DateOfEntry" />
                     <span asp-validation-for="DateOfEntry" class="text-danger"></span>
                 </div>
 
-
-
                 <div class="col-md-6">
-                    <label class="form-label">Total Hours Worked</label>
-                    <input asp-for="TotalHrsWorkedDisplay" id="TotalHrsWorkedDisplay" type="text" class="form-control" readonly />
-                    <input type="hidden" asp-for="TotalHrsWorked" id="TotalHrsWorked" />
+                    <label asp-for="DayType" class="form-label">Day Type</label>
+                    <select asp-for="DayType" class="form-select" id="DayType">
+                        <option value="Regular">Regular Work Day</option>
+                        <option value="PublicHoliday">Public Holiday</option>
+                        <optgroup label="I was on leave that day">
+                            @foreach (var lt in Model.LeaveTypeOptions)
+                            {
+                                <option value="@lt.Id">@lt.Name Leave</option>
+                            }
+                        </optgroup>
+                    </select>
+                    <small class="text-muted" id="dayTypeHelp">
+                        Picking a leave type here just flags the day and notifies your manager - it doesn't
+                        replace a formal <a asp-controller="Leave" asp-action="Create">Request Time Off</a> application.
+                    </small>
                 </div>
 
-                <div class="col-md-6">
-                    <label asp-for="StartTime" class="form-label">Start Time</label>
-                    <input asp-for="StartTime" type="time" class="form-control" id="StartTime" />
-                    <span asp-validation-for="StartTime" class="text-danger"></span>
+                <div id="workedDayFields" class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Start Time</label>
+                        <input value="@(Model.StartTime?.ToString("HH:mm") ?? "-")" class="form-control" readonly />
+                        <small class="text-muted">From check-in</small>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">End Time</label>
+                        <input value="@(Model.EndTime?.ToString("HH:mm") ?? "-")" class="form-control" readonly />
+                        <small class="text-muted">From check-out</small>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Total Hours Worked</label>
+                        <input value="@(Model.StartTime.HasValue && Model.EndTime.HasValue ? $"{(Model.EndTime.Value - Model.StartTime.Value).TotalHours:0.##} hrs" : "-")" class="form-control" readonly />
+                    </div>
+
+                    <div class="col-12">
+                        <label asp-for="DailyTask" class="form-label">Daily Task</label>
+                        <textarea asp-for="DailyTask" class="form-control" rows="4" maxlength="250"
+                                  oninput="updateCharacterCount(this)"></textarea>
+                        <small class="text-muted float-end"><span id="charCount">0</span>/250 characters</small>
+                        <span asp-validation-for="DailyTask" class="text-danger"></span>
+                    </div>
                 </div>
 
-                <div class="col-md-6">
-                    <label asp-for="EndTime" class="form-label">End Time</label>
-                    <input asp-for="EndTime" type="time" class="form-control" id="EndTime" />
-                    <span asp-validation-for="EndTime" class="text-danger"></span>
+                <div id="leaveDayFields" class="col-12" style="display:none;">
+                    <label asp-for="LeaveReason" class="form-label">Reason (optional)</label>
+                    <textarea asp-for="LeaveReason" class="form-control" rows="2" maxlength="250"></textarea>
                 </div>
 
-                <div class="col-12" id="dailyTaskSingle">
-                    <label asp-for="DailyTask" class="form-label">Daily Task</label>
-                    <textarea asp-for="DailyTask" class="form-control" rows="4" maxlength="100"
-                              oninput="updateCharacterCount(this)"></textarea>
-                    <small class="text-muted float-end"><span id="charCount">0</span>/100 characters</small>
-                    <span asp-validation-for="DailyTask" class="text-danger"></span>
+                <div class="col-12">
+                    <hr />
+                    <label asp-for="Signature" class="form-label">Employee Signature</label>
+                    <input asp-for="Signature" class="form-control" style="font-style: italic;"
+                           maxlength="100" placeholder="Type your full name to sign this timesheet" autocomplete="off" />
+                    <small class="text-muted" id="signatureHelp">
+                        By typing your name here you're signing off on this day's entry. This signature is
+                        what appears on your Weekly Time Sheet PDF once the week is generated.
+                    </small>
+                    <span asp-validation-for="Signature" class="text-danger"></span>
                 </div>
-                <div class="col-12" id="dailyTaskMultiple" style="display:none;">
-                    <label class="form-label">Daily Task(s) per Host Company</label>
-                    <div id="multiDailyTasks"></div>
-                </div>
-
             </div>
 
             <div class="d-flex justify-content-end mt-4">
@@ -139,8 +133,6 @@
                     <span id="submitText">Save Time Entry</span>
                     <span id="submitSpinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                 </button>
-
-
             </div>
         </form>
     </div>
@@ -159,7 +151,7 @@
                     You have missed submitting timesheets for the previous week (@TempData["MissedWeekStart"] - @TempData["MissedWeekEnd"]). Please request admin approval to proceed.
                 </div>
                 <div class="modal-footer d-flex justify-content-end" id="errorActionArea">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal" id="closeErrorModalButton">Close</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeErrorModalButton">Close</button>
 
                     <form asp-action="RequestAdminApproval" asp-controller="TimeTracker" method="post" id="approvalForm">
                         <button type="submit" class="btn btn-red" id="approvalButton">Request Admin Approval</button>
@@ -169,23 +161,6 @@
                     <div class="spinner-border ms-2" role="status" id="errorSpinnerIcon" style="display: none; color: #c82333;">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal Popup for Invalid Time Range -->
-    <div class="modal fade" id="invalidTimeRangeModal" tabindex="-1" role="dialog" aria-labelledby="invalidTimeRangeModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="invalidTimeRangeModalLabel">Invalid Time Entry</h5>
-                </div>
-                <div class="modal-body">
-                    <p>End Time cannot be earlier than Start Time. Please correct your time entry.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal" id="closeInvalidTimeRangeModalButton">Close</button>
                 </div>
             </div>
         </div>
@@ -220,7 +195,7 @@
                     }
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>
@@ -241,7 +216,7 @@
                     <ul id="validationErrorsList"></ul>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary">Close</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
 
             </div>
@@ -262,7 +237,7 @@
                 <!-- Message will be set by JS -->
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" id="closeRejectedModalButton">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeRejectedModalButton">Close</button>
             </div>
         </div>
     </div>
@@ -279,7 +254,7 @@
                 <!-- Message will be set by JS -->
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" id="closeAlreadyRequestedModalButton">Close</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeAlreadyRequestedModalButton">Close</button>
             </div>
         </div>
     </div>
@@ -288,422 +263,172 @@
 @section Scripts {
     @await Html.PartialAsync("_ValidationScriptsPartial")
 
-
     <script>
+        $(document).ready(function () {
+            function updateMonthFromDate() {
+                const selectedDate = new Date($('#DateOfEntry').val());
+                if (!isNaN(selectedDate.getTime())) {
+                    const monthName = selectedDate.toLocaleString('default', { month: 'long' });
+                    const year = selectedDate.getFullYear();
+                    $('#TimeSheetMonth').val(`${monthName} ${year}`);
+                }
+            }
 
-                        // Show --:-- as a visual placeholder for time fields
-                        function setTimePlaceholders() {
-                            // If empty, show --:-- as a faded overlay
-                            ['#StartTime', '#EndTime'].forEach(function (selector) {
-                                var $input = $(selector);
-                                if (!$input.val()) {
-                                    $input.addClass('time-placeholder');
-                                }
-                                $input.on('input', function () {
-                                    if ($input.val()) {
-                                        $input.removeClass('time-placeholder');
-                                    } else {
-                                        $input.addClass('time-placeholder');
-                                    }
-                                });
+            function setWeekBoundaries() {
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                const firstDayOfWeek = new Date(today);
+                firstDayOfWeek.setDate(today.getDate() + mondayOffset);
+                const lastDayOfWeek = new Date(firstDayOfWeek);
+                lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 4);
+
+                const minDate = firstDayOfWeek.toISOString().split('T')[0];
+                const maxDate = lastDayOfWeek.toISOString().split('T')[0];
+
+                const datePicker = document.getElementById("DateOfEntry");
+                if (datePicker) {
+                    datePicker.setAttribute("min", minDate);
+                    datePicker.setAttribute("max", maxDate);
+                    if (today.getDay() === 0 || today.getDay() === 6) {
+                        datePicker.value = maxDate;
+                    }
+                }
+                updateMonthFromDate();
+            }
+
+            $('#DateOfEntry').on('change', function () {
+                updateMonthFromDate();
+                // Changing the date means Start/End Time above are stale until the page reloads with
+                // that date's SharePoint record - the server re-derives the authoritative values from
+                // SharePoint on submit regardless of what's shown here.
+                $(this).closest('form').attr('data-date-changed', 'true');
+            });
+            setWeekBoundaries();
+            updateMonthFromDate();
+
+            $('#timeEntryForm').submit(function (e) {
+                e.preventDefault();
+
+                $('#submitText').addClass('d-none');
+                $('#submitSpinner').removeClass('d-none')
+                    .css({ 'display': 'inline-block', 'vertical-align': 'middle' });
+                $('#submitButton').prop('disabled', true)
+                    .css('min-width', $('#submitButton').outerWidth() + 'px');
+
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: $(this).attr('method'),
+                    data: $(this).serialize(),
+                    dataType: 'json',
+                    success: function (response) {
+                        if (response.showValidationError) {
+                            var errorsList = $('#validationErrorsList');
+                            errorsList.empty();
+                            response.errorMessages.forEach(function (error) {
+                                errorsList.append('<li>' + error + '</li>');
                             });
+                            $('#validationErrorModal').modal('show');
+                        } else if (response.showModal) {
+                            var startDate = response.missedWeekStart || '@TempData["MissedWeekStart"]';
+                            var endDate = response.missedWeekEnd || '@TempData["MissedWeekEnd"]';
+                            $('#errorModal .modal-body').text(
+                                'You have missed submitting timesheets for the previous week (' +
+                                startDate + ' - ' + endDate + '). Please request admin approval to proceed.'
+                            );
+                            $('#errorModal').modal({
+                                backdrop: 'static',
+                                keyboard: false
+                            }).modal('show');
+                        } else if (response.showDuplicateModal) {
+                            var errorMessage = '@TempData["DuplicateDateError"]';
+                            if (errorMessage) {
+                                $('#duplicateDateModal .modal-body').text(errorMessage);
+                            }
+                            $('#duplicateDateModal').modal('show');
+                        } else if (response.redirectUrl) {
+                            window.location.href = response.redirectUrl;
+                            return;
+                        } else if (response.showRejectedModal) {
+                            $('#rejectedModalBody').text(response.rejectedMessage);
+                            $('#rejectedModal').modal('show');
+                        } else if (response.showAlreadyRequestedModal) {
+                            $('#alreadyRequestedModalBody').text(response.alreadyRequestedMessage);
+                            $('#alreadyRequestedModal').modal('show');
                         }
-
-                        setTimePlaceholders();
-
-
-
-                $(document).ready(function () {
-                    // Store selected companies in an array
-                    var selectedCompanies = [];
-
-                    // --- Keep hidden fields in sync ---
-                    function updateHiddenFields() {
-                        if ($('#multiHostCheckbox').is(':checked')) {
-                            // Multi mode: set hidden fields from selected companies and daily tasks
-                            $('#HostCompanyNameHidden').val(selectedCompanies.join(', '));
-                            var dailyTasks = [];
-                            selectedCompanies.forEach(function (company) {
-                                var safeId = company.replace(/[^a-zA-Z0-9]/g, '_');
-                                var task = $('#DailyTask_' + safeId).val() || '';
-                                if (task.trim() !== '') {
-                                    dailyTasks.push(company + ': ' + task.trim());
-                                }
-                            });
-                            $('#DailyTaskHidden').val(dailyTasks.join('; '));
-                        } else {
-                            // Single mode: set hidden fields from visible fields
-                            $('#HostCompanyNameHidden').val($('#HostCompanyName').val());
-                            $('#DailyTaskHidden').val($('#DailyTask').val());
-                        }
+                        $('#submitText').removeClass('d-none');
+                        $('#submitSpinner').addClass('d-none');
+                        $('#submitButton').prop('disabled', false)
+                            .css('min-width', '120px');
                     }
+                });
+            });
 
-                    // Toggle between single and multiple host company selection
-                    $('#multiHostCheckbox').on('change', function () {
-                        if ($(this).is(':checked')) {
-                            $('#hostCompanySingle').hide();
-                            $('#hostCompanyMultiple').show();
-                            $('#dailyTaskSingle').hide();
-                            $('#dailyTaskMultiple').show();
-                            renderMultiDailyTasks();
-                        } else {
-                            $('#hostCompanyMultiple').hide();
-                            $('#hostCompanySingle').show();
-                            $('#dailyTaskMultiple').hide();
-                            $('#dailyTaskSingle').show();
-                            // Clear selections when switching back to single mode
-                            selectedCompanies = [];
-                            updateSelectedCompanies();
-                        }
-                        updateHiddenFields();
-                    });
+            // Handle admin approval request
+            $('#errorModal form').submit(function (e) {
+                e.preventDefault();
+                $('#approvalButton').hide();
+                $('#closeErrorModalButton').hide();
+                $('#errorSpinnerIcon').show();
 
-                    // Add company
-                    $('#multiHostSelect').on('change', function () {
-                        var val = $(this).val();
-                        if (val && !selectedCompanies.includes(val)) {
-                            selectedCompanies.push(val);
-                            updateSelectedCompanies();
-                            renderMultiDailyTasks();
-                        }
-                        $(this).val('');
-                        updateHiddenFields();
-                    });
-
-                    // Remove company
-                    $('#selectedCompanies').on('click', '.remove-company', function (e) {
-                        e.preventDefault();
-                        var val = $(this).data('value');
-                        selectedCompanies = selectedCompanies.filter(function (c) { return c !== val; });
-                        updateSelectedCompanies();
-                        renderMultiDailyTasks();
-                        updateHiddenFields();
-                    });
-
-                    function updateSelectedCompanies() {
-                        var html = '';
-                        selectedCompanies.forEach(function (company) {
-                            html += '<span class="badge me-1 mb-1" style="background-color: #c82333; color: white;">' + company +
-                                ' <a href="javascript:void(0);" class="text-white ms-1 remove-company" data-value="' + company + '">&times;</a></span>';
-                        });
-                        $('#selectedCompanies').html(html);
-                        $('#SelectedHostCompanies').val(selectedCompanies.join(','));
-                    }
-
-                    // Render daily task textareas for each selected company
-                    function renderMultiDailyTasks() {
-                        var html = '';
-                        selectedCompanies.forEach(function (company, idx) {
-                            var safeId = company.replace(/[^a-zA-Z0-9]/g, '_');
-                            html += `
-                                <div class="mb-2" data-company="${company}">
-                                    <label class="form-label">${company} Daily Task</label>
-                                    <textarea name="DailyTasksPerCompany[${company}]" id="DailyTask_${safeId}" class="form-control multi-daily-task" rows="2" maxlength="100"></textarea>
-                                    <small class="text-muted float-end"><span class="charCount">0</span>/100 characters</small>
-                                </div>
-                            `;
-                        });
-                        $('#multiDailyTasks').html(html);
-                        updateHiddenFields();
-                    }
-
-                    // Character count for dynamic textareas
-                    $(document).on('input', '.multi-daily-task', function () {
-                        var charCount = $(this).val().length;
-                        $(this).siblings('.text-muted').find('.charCount').text(charCount);
-                        updateHiddenFields();
-                    });
-
-                    // Keep hidden fields in sync with single fields
-                    $('#HostCompanyName, #DailyTask').on('input change', updateHiddenFields);
-
-                    // On form submit, ensure hidden input is updated
-                    $('form').on('submit', function () {
-                        $('#SelectedHostCompanies').val(selectedCompanies.join(','));
-                        updateHiddenFields();
-                    });
-
-                    // Initialize character count for single daily task on page load
-                    const initialText = $('#DailyTask').val() || '';
-                    $('#charCount').text(initialText.length);
-
-                    // Modal and other utility functions
-                    $('#errorModal').on('shown.bs.modal', function () {
-                        $('#closeErrorModalButton').show();
+                $.ajax({
+                    url: $(this).attr('action'),
+                    type: $(this).attr('method'),
+                    data: $(this).serialize(),
+                    success: function (response) {
+                        $('#errorModal').modal('hide');
+                        var toast = new bootstrap.Toast(document.getElementById('approvalToast'));
+                        toast.show();
+                        $('#submitText').removeClass('d-none');
+                        $('#submitSpinner').addClass('d-none');
+                        $('#submitButton').prop('disabled', false)
+                            .css('min-width', '120px');
+                    },
+                    error: function (xhr, status, error) {
+                        console.error(error);
+                        alert('Failed to request admin approval. Please try again.');
+                    },
+                    complete: function () {
                         $('#approvalButton').show();
+                        $('#closeErrorModalButton').show();
                         $('#errorSpinnerIcon').hide();
-                    });
-
-
-                    //close modal popups
-                    $('#alreadyRequestedModal .btn-secondary').on('click', function() {
-                    $('#alreadyRequestedModal').modal('hide');
-                    });
-
-                    $('#errorModal .btn-secondary, #validationErrorModal .btn-secondary, #duplicateDateModal .btn-secondary, #rejectedModal .btn-secondary').on('click', function() {
-                        $(this).closest('.modal').modal('hide');
-                    });
-
-                          $('#closeInvalidTimeRangeModalButton').on('click', function () {
-            $('#invalidTimeRangeModal').modal('hide');
-
-            // Clear Start and End Time fields
-            $('#StartTime').val('').trigger('input');
-            $('#EndTime').val('').trigger('input');
-
-            // Optionally clear total hours fields
-            $('#TotalHrsWorkedDisplay').val("0 Hours 0 Minutes");
-            $('#TotalHrsWorked').val("0:00");
+                    }
+                });
+            });
         });
 
-
-
-           function updateTotalHours() {
-            var start = $('#StartTime').val();
-            var end = $('#EndTime').val();
-
-            if (start && end) {
-                var startParts = start.split(':');
-                var endParts = end.split(':');
-
-                var startTime = new Date(2000, 0, 1, startParts[0], startParts[1]);
-                var endTime = new Date(2000, 0, 1, endParts[0], endParts[1]);
-
-                if (endTime <= startTime) {
-                    // Trigger the invalid time modal
-                    $('#invalidTimeRangeModal').modal('show');
-
-                    $('#TotalHrsWorkedDisplay').val("0 Hours 0 Minutes");
-                    $('#TotalHrsWorked').val("0:00");
-                    return;
-                }
-
-                var diffMs = (endTime - startTime) - (30 * 60 * 1000); // Subtract 30 min break
-                diffMs = Math.max(0, diffMs); // Ensure not negative
-
-                var hours = Math.floor(diffMs / (1000 * 60 * 60));
-                var minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                // Format for display
-                $('#TotalHrsWorkedDisplay').val(`${hours} Hours ${minutes} Minutes`);
-
-                // Format for database submission (HH:mm)
-                $('#TotalHrsWorked').val(`${hours}:${minutes < 10 ? "0" + minutes : minutes}`);
+        function updateCharacterCount(textarea) {
+            const charCount = textarea.value.length;
+            document.getElementById('charCount').textContent = charCount;
+            const counter = document.getElementById('charCount');
+            if (charCount > 220) {
+                counter.classList.add('text-danger');
+            } else {
+                counter.classList.remove('text-danger');
             }
         }
 
+        // Day Type dropdown: Regular Work Day (normal flow, unchanged) / Public Holiday (same behaviour
+        // the old checkbox had - Daily Task auto-filled and locked) / a specific leave type (hides the
+        // worked-day fields entirely and shows the optional Reason box instead - see
+        // TimeTrackerController.HandleLeaveFlagAsync for what actually happens on submit).
+        $('#DayType').on('change', function () {
+            const value = $(this).val();
+            const isLeaveType = value !== 'Regular' && value !== 'PublicHoliday';
 
+            $('#workedDayFields').toggle(!isLeaveType);
+            $('#leaveDayFields').toggle(isLeaveType);
 
-
-                    function updateMonthFromDate() {
-                        const selectedDate = new Date($('#DateOfEntry').val());
-                        if (!isNaN(selectedDate.getTime())) {
-                            const monthName = selectedDate.toLocaleString('default', { month: 'long' });
-                            const year = selectedDate.getFullYear();
-                            $('#TimeSheetMonth').val(`${monthName} ${year}`);
-                        }
-                    }
-
-                    function setWeekBoundaries() {
-                        const today = new Date();
-                        const dayOfWeek = today.getDay();
-                        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                        const firstDayOfWeek = new Date(today);
-                        firstDayOfWeek.setDate(today.getDate() + mondayOffset);
-                        const lastDayOfWeek = new Date(firstDayOfWeek);
-                        lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 4);
-
-                        const minDate = firstDayOfWeek.toISOString().split('T')[0];
-                        const maxDate = lastDayOfWeek.toISOString().split('T')[0];
-
-                        const datePicker = document.getElementById("DateOfEntry");
-                        if (datePicker) {
-                            datePicker.setAttribute("min", minDate);
-                            datePicker.setAttribute("max", maxDate);
-                            if (today.getDay() === 0 || today.getDay() === 6) {
-                                datePicker.value = maxDate;
-                            }
-                        }
-                        updateMonthFromDate();
-                    }
-
-                    $('#StartTime, #EndTime').on('change', updateTotalHours);
-                    $('#DateOfEntry').on('change', updateMonthFromDate);
-                    setWeekBoundaries();
-                    updateTotalHours();
-                    updateMonthFromDate();
-
-            $('#timeEntryForm').submit(function(e) {
-                e.preventDefault();
-
-            // Custom validation: Start and End Time are 00:00 and not public holiday
-            var startTime = $('#StartTime').val();
-            var endTime = $('#EndTime').val();
-            var isPublicHoliday = $('#IsPublicHoliday').is(':checked');
-
-            if (startTime === "00:00" && endTime === "00:00" && !isPublicHoliday) {
-                // Show validation error modal with custom message
-                var errorsList = $('#validationErrorsList');
-                errorsList.empty();
-                errorsList.append('<li>Start Time and End Time cannot both be 00:00 unless it is a Public Holiday.</li>');
-                $('#validationErrorModal').modal('show');
-                $('#submitText').removeClass('d-none');
-                $('#submitSpinner').addClass('d-none');
-                $('#submitButton').prop('disabled', false)
-                    .css('min-width', '120px');
-                return; // Prevent AJAX submit
+            if (value === 'PublicHoliday') {
+                $('#DailyTask').val('Public Holiday').prop('readonly', true);
+            } else if (!isLeaveType) {
+                $('#DailyTask').val('').prop('readonly', false);
             }
 
-
-                        $('#submitText').addClass('d-none');
-                        $('#submitSpinner').removeClass('d-none')
-                            .css({'display': 'inline-block', 'vertical-align': 'middle'});
-                        $('#submitButton').prop('disabled', true)
-                            .css('min-width', $('#submitButton').outerWidth() + 'px');
-
-                        $.ajax({
-                            url: $(this).attr('action'),
-                            type: $(this).attr('method'),
-                            data: $(this).serialize(),
-                            dataType: 'json',
-                            success: function(response) {
-                                if (response.showValidationError) {
-                                    var errorsList = $('#validationErrorsList');
-                                    errorsList.empty();
-                                    response.errorMessages.forEach(function(error) {
-                                        errorsList.append('<li>' + error + '</li>');
-                                    });
-                                    $('#validationErrorModal').modal('show');
-                                } else if (response.showModal) {
-                                    var startDate = response.missedWeekStart || '@TempData["MissedWeekStart"]';
-                                    var endDate = response.missedWeekEnd || '@TempData["MissedWeekEnd"]';
-                                    $('#errorModal .modal-body').text(
-                                        'You have missed submitting timesheets for the previous week (' +
-                                        startDate + ' - ' + endDate + '). Please request admin approval to proceed.'
-                                    );
-                                    $('#errorModal').modal({
-                                        backdrop: 'static',
-                                        keyboard: false
-                                    }).modal('show');
-                                } else if (response.showDuplicateModal) {
-                                    var errorMessage = '@TempData["DuplicateDateError"]';
-                                    if (errorMessage) {
-                                        $('#duplicateDateModal .modal-body').text(errorMessage);
-                                    }
-                                    $('#duplicateDateModal').modal('show');
-                                } else if (response.redirectUrl) {
-                                    window.location.href = response.redirectUrl;
-                                    return;
-                                } else if (response.showRejectedModal) {
-                                    $('#rejectedModalBody').text(response.rejectedMessage);
-                                    $('#rejectedModal').modal('show');
-                                }
-                                        else if (response.showAlreadyRequestedModal) {
-                    $('#alreadyRequestedModalBody').text(response.alreadyRequestedMessage);
-                    $('#alreadyRequestedModal').modal('show');
-                }
-                                $('#submitText').removeClass('d-none');
-                                $('#submitSpinner').addClass('d-none');
-                                $('#submitButton').prop('disabled', false)
-                                    .css('min-width', '120px');
-                            }
-                        });
-                    });
-
-                    // Handle admin approval request
-                    $('#errorModal form').submit(function(e) {
-                        e.preventDefault();
-                        $('#approvalButton').hide();
-                        $('#closeErrorModalButton').hide();
-                        $('#errorSpinnerIcon').show();
-
-                        $.ajax({
-                            url: $(this).attr('action'),
-                            type: $(this).attr('method'),
-                            data: $(this).serialize(),
-                            success: function(response) {
-                                $('#errorModal').modal('hide');
-                                $('#HostCompanyName').val('');
-                                $('#StartTime').val('');
-                                $('#EndTime').val('');
-                                $('#TotalHrsWorked').val('0');
-                                $('#DailyTask').val('');
-                                var today = new Date().toISOString().split('T')[0];
-                                $('#DateOfEntry').val(today);
-                                updateMonthFromDate();
-                                var toast = new bootstrap.Toast(document.getElementById('approvalToast'));
-                                toast.show();
-                                $('#submitText').removeClass('d-none');
-                                $('#submitSpinner').addClass('d-none');
-                                $('#submitButton').prop('disabled', false)
-                                    .css('min-width', '120px');
-                            },
-                            error: function(xhr, status, error) {
-                                console.error(error);
-                                alert('Failed to request admin approval. Please try again.');
-                            },
-                            complete: function() {
-                                $('#approvalButton').show();
-                                $('#closeErrorModalButton').show();
-                                $('#errorSpinnerIcon').hide();
-                            }
-                        });
-                    });
-                });
-
-                function updateCharacterCount(textarea) {
-                    const charCount = textarea.value.length;
-                    document.getElementById('charCount').textContent = charCount;
-                    const counter = document.getElementById('charCount');
-                    if (charCount > 40) {
-                        counter.classList.add('text-danger');
-                    } else {
-                        counter.classList.remove('text-danger');
-                    }
-                }
-
-                        // Add this to your $(document).ready function
-                $('#IsPublicHoliday').on('change', function() {
-                    if ($(this).is(':checked')) {
-                        // Set default values for public holiday
-                        $('#HostCompanyName').val('PSS').prop('disabled', true);
-                        $('#TotalHrsWorked').val('8').prop('readonly', true);
-                        $('#StartTime').val('00:00').prop('disabled', true);
-                        $('#EndTime').val('00:00').prop('disabled', true);
-                        $('#DailyTask').val('Public Holiday').prop('readonly', true);
-
-                        // For multi-host company mode
-                        if ($('#multiHostCheckbox').is(':checked')) {
-                            $('#multiHostCheckbox').prop('checked', false).trigger('change');
-                        }
-                    } else {
-                        // Re-enable fields when unchecked
-                        $('#HostCompanyName').val('').prop('disabled', false);
-                        $('#TotalHrsWorked').val('0').prop('readonly', false);
-                        $('#StartTime').val('').prop('disabled', false);
-                        $('#EndTime').val('').prop('disabled', false);
-                        $('#DailyTask').val('').prop('readonly', false);
-                    }
-                });
-
-                        $(document).ready(function () {
-                    // Function to handle enabling/disabling the multi host checkbox
-                    function toggleMultiHostCheckbox() {
-                        if ($('#IsPublicHoliday').is(':checked')) {
-                            $('#multiHostCheckbox').prop('checked', false).prop('disabled', true).trigger('change');
-                        } else {
-                            $('#multiHostCheckbox').prop('disabled', false);
-                        }
-                    }
-
-                    // Initial check on page load
-                    toggleMultiHostCheckbox();
-
-                    // Handle toggle when the IsPublicHoliday checkbox changes
-                    $('#IsPublicHoliday').on('change', function () {
-                        toggleMultiHostCheckbox();
-                    });
-                });
+            $('#signatureHelp').text(isLeaveType
+                ? "By typing your name here you're confirming you were on leave that day - this notifies your manager, it doesn't submit hours worked."
+                : "By typing your name here you're signing off on this day's entry. This signature is what appears on your Weekly Time Sheet PDF once the week is generated.");
+        });
     </script>
 }
 
@@ -761,39 +486,4 @@
         margin-right: auto;
         width: 100%;
     }
-
-
-    /* Custom style for --:-- placeholder on time inputs */
-    input[type="time"].time-placeholder {
-        color: #bbb;
-        position: relative;
-    }
-
-        input[type="time"].time-placeholder::-webkit-input-placeholder {
-            color: #bbb;
-        }
-
-        input[type="time"].time-placeholder::-moz-placeholder {
-            color: #bbb;
-        }
-
-        input[type="time"].time-placeholder:-ms-input-placeholder {
-            color: #bbb;
-        }
-
-        input[type="time"].time-placeholder::placeholder {
-            color: #bbb;
-        }
-        /* Overlay --:-- using a pseudo-element */
-        /* input[type="time"].time-placeholder::before {
-            content: "--:--";
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #bbb;
-            pointer-events: none;
-        } */
-
-
 </style>

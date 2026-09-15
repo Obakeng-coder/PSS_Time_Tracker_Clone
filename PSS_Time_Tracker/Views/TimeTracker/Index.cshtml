@@ -1,4 +1,5 @@
 ﻿@model IEnumerable<TimeSheetRecorder.Models.TimeTrackerModel>
+@using PSS_Time_Tracker.Services
 <link href="~/assets/css/custom.css" rel="stylesheet">
 @{
     ViewData["Title"] = "My Timesheet Entries";
@@ -11,6 +12,14 @@
 
     var userNameRaw = User.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
     var userName = userNameRaw?.Split('|')[0].Trim();
+
+    // Only populated once the employee has filtered to a specific week (see
+    // TimeTrackerController.Index) - drives the Timesheet Gaps panel below.
+    var dayResolutions = ViewBag.DayResolutions as List<DayResolution>;
+    var myTrueGaps = dayResolutions?.Where(d => d.Kind == DayResolutionKind.TrueGap).ToList()
+        ?? new List<DayResolution>();
+    var myPending = dayResolutions?.Where(d => d.Kind == DayResolutionKind.PendingConfirmation).ToList()
+        ?? new List<DayResolution>();
 
     @functions {
         // Converts decimal hours (e.g., 7.63) to "7 Hours 38 Minutes"
@@ -49,6 +58,14 @@
             </div>
 
             <div class="card-body">
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+                }
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+                }
                 @if (!User.Identity.IsAuthenticated)
                 {
                     <div class="alert alert-info" role="alert">
@@ -87,6 +104,55 @@
                         </div>
                     </div>
 
+                    @if (dayResolutions != null && (myTrueGaps.Any() || myPending.Any()))
+                    {
+                   
+                        <div class="card mb-3">
+                            <div class="card-header"><strong>Timesheet Gaps This Week</strong></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var gap in myTrueGaps)
+                                        {
+                                            <tr class="table-danger">
+                                                <td>@gap.Date.ToString("yyyy-MM-dd")</td>
+                                                <td>Unresolved Gap</td>
+                                                <td>
+                                                    <form asp-action="RequestGapResolution" asp-controller="TimeTracker" method="post" class="d-flex gap-1 align-items-center flex-wrap">
+                                                        @Html.AntiForgeryToken()
+                                                        <input type="hidden" name="date" value="@gap.Date.ToString("yyyy-MM-dd")" />
+                                                        <select name="method" class="form-select form-select-sm" style="width:auto;">
+                                                            <option value="Holiday">Holiday</option>
+                                                            <option value="RetroactiveLeave">Leave</option>
+                                                            <option value="UnpaidAbsence">Absent</option>
+                                                        </select>
+                                                        <input type="text" name="notes" class="form-control form-control-sm" style="width:160px;" placeholder="Notes (optional)" maxlength="200" />
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger">Submit</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        }
+                                        @foreach (var gap in myPending)
+                                        {
+                                            <tr class="table-warning">
+                                                <td>@gap.Date.ToString("yyyy-MM-dd")</td>
+                                                <td>Awaiting your manager's confirmation (@gap.Note)</td>
+                                                <td></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
                     if (!Model.Any())
                     {
                         <div class="alert alert-info" role="alert">
@@ -103,14 +169,13 @@
                                 <tr>
                                     <th>Employee Full Name</th>
                                     @* <th>Supervisor</th> *@
-                                    <th>Host Company</th>
+                                    <th>Work Location</th>
                                     <th>Date Of Entry</th>
                                     <th>Start Time</th>
                                     <th>End Time</th>
                                     <th>Total Hours Worked</th>
                                     <th>Daily Task</th>
-                                    
-                                  
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -119,7 +184,7 @@
                                     <tr>
                                         <td>@item.EmployeeName @item.EmployeeSurname</td>
                                         @* <td>@item.SupervisorFullName</td> *@
-                                        <td>@item.HostCompanyName</td>
+                                        <td>@item.WorkLocation</td>
                                         <td>@item.DateOfEntry.ToString("yyyy-MM-dd")</td>
                                         <td>@item.StartTime.ToString("HH:mm")</td>
                                         <td>@item.EndTime.ToString("HH:mm")</td>
@@ -133,7 +198,13 @@
                                                 }
                                             }
                                         </td>
-                                                                       
+                                        <td>
+                                            @if (item.IsFlaggedForReview)
+                                            {
+                                                <span class="badge bg-warning text-dark" title="@item.FlagReason">&#9888; Flagged</span>
+                                            }
+                                            <a asp-action="Edit" asp-route-id="@item.TimeTrackerId" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -238,76 +309,16 @@
 </div>
 
 
-<!-- Signature Modal -->
-<div class="modal fade" id="signatureModal" tabindex="-1" role="dialog" aria-labelledby="signatureModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="signatureModalLabel">Add Your Signature</h5>
-            </div>
-            <div class="modal-body">
-                <form id="signatureForm">
-                    <div class="form-group">
-                        <label for="signatureInput">Type your name to create a signature (max 13 characters):</label>
-                        <input type="text" class="form-control" id="signatureInput" maxlength="13" required>
-                        <small class="form-text text-muted" style="display: flex; justify-content: flex-end;">
-                            <span id="signatureCharCount">0</span>/13 characters
-                        </small>
-                    </div>
-                    <div class="signature-preview">
-                        <p>Signature Preview:</p>
-                        <div id="signaturePreview" style="font-family: 'Whisper', cursive; font-size: 40px; min-height: 50px; border-bottom: 1px solid #ccc; padding-bottom: 5px;"></div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" id="confirmSignature" style="background-color: #c82333 !important; color: white !important; border-color: #c82333 !important;">Use Signature</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-
+<!-- Dedicated antiforgery token for the report-generation POST below - not scraped from an
+     unrelated form on the page (e.g. the layout's logout form), which was fragile. -->
+<form id="reportAntiForgeryForm">@Html.AntiForgeryToken()</form>
 
 @section Scripts {
     <script>
-         $(document).ready(function() {
-        // Initialize character count for signature input
-        function updateSignatureCharCount() {
-            const charCount = $('#signatureInput').val().length;
-            $('#signatureCharCount').text(charCount);
-            
-            // Change color when approaching limit (same as your daily task implementation)
-            const counter = $('#signatureCharCount');
-            if (charCount > 10) {  // Change color when 3 characters remain (13-10)
-                counter.addClass('text-danger');
-            } else {
-                counter.removeClass('text-danger');
-            }
-        }
-
-        // Update character count and preview in real-time
-        $('#signatureInput').on('input', function() {
-            updateSignatureCharCount();
-            $('#signaturePreview').text($(this).val());
-        });
-
-        // Initialize on modal show
-        $('#signatureModal').on('shown.bs.modal', function() {
-            updateSignatureCharCount();
-        });
-    });
-
-
         document.addEventListener('DOMContentLoaded', function() {
             const toggleFilterBtn = document.getElementById('toggleFilterBtn');
             const filterCard = document.getElementById('filterCard');
             const generateReportBtn = document.getElementById('generateReportBtn');
-            const signatureModal = new bootstrap.Modal(document.getElementById('signatureModal'));
-            const signatureInput = document.getElementById('signatureInput');
-            const signaturePreview = document.getElementById('signaturePreview');
-            const confirmSignature = document.getElementById('confirmSignature');
 
             // Filter toggle logic (unchanged)
             if (toggleFilterBtn && filterCard) {
@@ -333,47 +344,31 @@
                 });
             }
 
-            // Show modal on button click
+            // Every daily entry is already signed at submission time (see the Employee Signature
+            // field on the Log Time Entry form), so generating the weekly report no longer needs its
+            // own separate "type your signature" step - it's just the date range now. The server still
+            // re-checks that every day in the range is actually signed before producing the PDF.
             if (generateReportBtn) {
                 generateReportBtn.addEventListener('click', function(e) {
                     e.preventDefault();
-                    if (signatureInput) signatureInput.value = '';
-                    if (signaturePreview) signaturePreview.textContent = '';
-                    signatureModal.show();
-                });
-            }
 
-            // Live signature preview
-            if (signatureInput && signaturePreview) {
-                signatureInput.addEventListener('input', function() {
-                    signaturePreview.textContent = signatureInput.value;
-                });
-            }
-
-            // Handle signature confirmation (you can add PDF generation logic here)
-            if (confirmSignature) {
-                confirmSignature.addEventListener('click', function() {
-                    if (!signatureInput.value.trim()) {
-                        signatureInput.classList.add('is-invalid');
-                        return;
-                    }
-                    signatureInput.classList.remove('is-invalid');
-                    signatureModal.hide();
-
-                  
-                    // For now, just alert the signature
-                    // alert('Signature: ' + signatureInput.value);
-
-                    // Example: Submit the form as before, but include the signature
                     const startDate = document.getElementById('startDate').value;
                     const endDate = document.getElementById('endDate').value;
+
+                    // Fail fast client-side too, rather than round-tripping a request the server
+                    // will just reject - this is what was silently producing a 0001-01-01 PDF before.
+                    if (!startDate || !endDate) {
+                        alert('Please filter to a complete Monday-Friday week before generating a report.');
+                        return;
+                    }
 
                     var form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/TimeTracker/GenerateWeeklyReport';
 
-                    // Add anti-forgery token
-                    var token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    // Dedicated token rendered specifically for this form (see #reportAntiForgeryForm
+                    // above) - not scraped from an unrelated form elsewhere on the page.
+                    var token = document.querySelector('#reportAntiForgeryForm input[name="__RequestVerificationToken"]').value;
                     var tokenInput = document.createElement('input');
                     tokenInput.type = 'hidden';
                     tokenInput.name = '__RequestVerificationToken';
@@ -391,12 +386,6 @@
                     endDateInput.name = 'endDate';
                     endDateInput.value = endDate;
                     form.appendChild(endDateInput);
-
-                    var signatureField = document.createElement('input');
-                    signatureField.type = 'hidden';
-                    signatureField.name = 'signature';
-                    signatureField.value = signatureInput.value;
-                    form.appendChild(signatureField);
 
                     document.body.appendChild(form);
                     form.submit();

@@ -1,0 +1,52 @@
+@model TimeSheetRecorder.Models.TimeTrackerModel
+@{
+    ViewData["Title"] = "Edit Time Entry";
+}
+
+<div class="card shadow-lg rounded-4 p-4 mb-5 form-card" style="max-width: 700px; margin: 2rem auto;">
+    <h3 class="mb-4">Edit @Model.DateOfEntry.ToString("yyyy-MM-dd")</h3>
+    <div class="card-body">
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="alert alert-danger">
+                <ul class="mb-0">
+                    @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                    {
+                        <li>@error.ErrorMessage</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Date</label>
+            <input class="form-control" value="@Model.DateOfEntry.ToString("yyyy-MM-dd")" readonly />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Start Time / End Time / Total Hours</label>
+            <input class="form-control" value="@Model.StartTime.ToString("HH:mm") - @Model.EndTime.ToString("HH:mm") (@Model.TotalHrsWorked.ToString("0.##") hrs)" readonly />
+            <small class="text-muted">Pulled from SharePoint at submission time - not editable.</small>
+        </div>
+
+        <form asp-action="Edit" asp-route-id="@Model.TimeTrackerId" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="mb-3">
+                <label class="form-label" for="dailyTask">Daily Task</label>
+                <textarea class="form-control" id="dailyTask" name="dailyTask" rows="4" maxlength="250">@Model.DailyTask</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="signature">Re-sign to confirm this edit</label>
+                <input type="text" class="form-control" id="signature" name="signature" maxlength="100"
+                       style="font-style: italic;" placeholder="Type your full name to re-sign this entry" autocomplete="off" />
+                <small class="text-muted">Editing the task clears the previous signature - you need to re-sign to confirm the change.</small>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a asp-action="Index" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-danger" style="background-color: #c82333; border-color: #bd2130;">Save</button>
+            </div>
+        </form>
+    </div>
+</div>

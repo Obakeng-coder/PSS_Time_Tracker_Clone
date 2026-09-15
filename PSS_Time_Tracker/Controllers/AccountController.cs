@@ -65,6 +65,11 @@ namespace PSS_Time_Tracker.Controllers
                 claims.Add(new Claim("groups", _configuration["ManagerGroupId"] ?? "local-managers"));
             }
 
+            if (user.IsHr)
+            {
+                claims.Add(new Claim("groups", _configuration["HrGroupId"] ?? "local-hr"));
+            }
+
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme, nameType: "name", roleType: ClaimTypes.Role);
             var principal = new ClaimsPrincipal(identity);
 

@@ -58,7 +58,6 @@ BEGIN
         EmployeeSurname,
         JobTitle,
         SupervisorFullName,
-        HostCompanyName,
         TimeSheetMonth,
         DateOfEntry,
         StartTime,
@@ -66,10 +65,13 @@ BEGIN
         TotalHrsWorked,
         DailyTask,
         UserAccountAzureAdUserId,
-        IsPublicHoliday
-    FROM 
+        IsPublicHoliday,
+        IsFlaggedForReview,
+        FlagReason,
+        WorkLocation
+    FROM
         TimeTracker
-    WHERE 
+    WHERE
         AzureAdUserId = @AzureAdUserId
         AND (@StartDate IS NULL OR DateOfEntry >= @StartDate)
         AND (@EndDate IS NULL OR DateOfEntry <= @EndDate)

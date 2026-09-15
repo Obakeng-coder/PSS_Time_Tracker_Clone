@@ -24,6 +24,21 @@ namespace PSS_Time_Tracker.Models
         [Column("JobTitle")]
         public string JobTitle { get; set; } = "Not specified";
 
+        // Added for the Leave Management module - these fields appear on the real Employee Leave
+        // Application form but had no home in the schema before. All optional/nullable since existing
+        // seeded accounts won't have them.
+        [Column("Department")]
+        public string? Department { get; set; }
+
+        [Column("IdNumber")]
+        public string? IdNumber { get; set; }
+
+        [Column("EmployeeNumber")]
+        public string? EmployeeNumber { get; set; }
+
+        [Column("PhoneNumber")]
+        public string? PhoneNumber { get; set; }
+
         [Column("ApprovalStatus")]
         public int ApprovalStatus { get; set; } = 1;
         [Column("SupervisorFullName")]
@@ -36,6 +51,13 @@ namespace PSS_Time_Tracker.Models
         // should see the Manager Board / Approve Employees / Host Companies screens.
         [Column("IsManager")]
         public bool IsManager { get; set; } = false;
+
+        // Separate from IsManager - a line manager only ever sees their own reports' leave requests
+        // (recommend/reject stage); HR sees every request once it reaches the HR/Payroll stage
+        // (with-pay/without-pay decision + balance capture), regardless of who their manager is. One
+        // person can be both (both flags true) if that fits how a smaller team is actually staffed.
+        [Column("IsHr")]
+        public bool IsHr { get; set; } = false;
 
         public virtual ICollection<TimeTrackerModel> TimeEntries { get; set; } = new List<TimeTrackerModel>();
     }

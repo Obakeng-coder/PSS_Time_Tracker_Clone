@@ -89,9 +89,20 @@ A good path to trace the employee → manager flow:
 
 ## If you want email notifications to actually send
 
-Fill in `EmailSettings:ServiceAccountEmail` / `ServiceAccountPassword` in
-`appsettings.json` with a real SMTP account (an app password works well for most providers).
-Nothing in the code needs to change — `EmailService.cs` is untouched from the original.
+Don't put real credentials in `appsettings.json` — set them via `dotnet user-secrets` instead, so
+they never end up committed:
+
+```bash
+cd PSS_Time_Tracker
+dotnet user-secrets set "EmailSettings:ServiceAccountEmail" "you@example.com"
+dotnet user-secrets set "EmailSettings:ServiceAccountPassword" "your-app-password"
+```
+
+ASP.NET Core loads user secrets automatically in Development (the project already has a
+`UserSecretsId`), and they override the blank values in `appsettings.json`. An app password works
+well for most providers. Nothing in the code needs to change — `EmailService.cs` is untouched from
+the original. For a shared/staging deployment, use environment variables or a real secrets manager
+instead of user secrets (which are local-machine-only by design).
 
 ## Adding more test accounts
 

@@ -1,4 +1,5 @@
 ﻿@model List<TimeSheetRecorder.Models.TimeTrackerModel>
+@using PSS_Time_Tracker.Services
 
 @functions {
     // Converts decimal hours (e.g., 7.63) to "7 Hours 38 Minutes"
@@ -16,6 +17,17 @@
     int totalPages = ViewBag.TotalPages ?? 1;
     bool hasPrevious = ViewBag.HasPrevious ?? false;
     bool hasNext = ViewBag.HasNext ?? false;
+
+    // Only populated once the manager has filtered to a specific week (see
+    // ManagerController.EmployeeTimeSheetDetails) - drives the Timesheet Gaps panel below.
+    var dayResolutions = ViewBag.DayResolutions as List<DayResolution>;
+    var trueGaps = dayResolutions?.Where(d => d.Kind == DayResolutionKind.TrueGap).ToList()
+        ?? new List<DayResolution>();
+    var needsSignature = dayResolutions?.Where(d => d.Kind == DayResolutionKind.NeedsSignature).ToList()
+        ?? new List<DayResolution>();
+    var pendingConfirmations = dayResolutions?.Where(d => d.Kind == DayResolutionKind.PendingConfirmation).ToList()
+        ?? new List<DayResolution>();
+    var actionableCount = trueGaps.Count + needsSignature.Count + pendingConfirmations.Count;
 }
 
 <div class="row">
@@ -26,8 +38,14 @@
                 <div>
                     @if (ViewBag.ShowReportButton == true)
                     {
+                        <div class="btn-group me-2" role="group" aria-label="Gap resolution mode" title="Strict blocks the report until every gap day is resolved. Soft auto-assigns Unpaid Absence (0 hrs) to any gap and generates anyway, flagged.">
+                            <input type="radio" class="btn-check" name="gapResolutionMode" id="gapModeStrict" value="Strict" checked>
+                            <label class="btn btn-outline-secondary btn-sm" for="gapModeStrict">Strict</label>
+                            <input type="radio" class="btn-check" name="gapResolutionMode" id="gapModeSoft" value="Soft">
+                            <label class="btn btn-outline-secondary btn-sm" for="gapModeSoft">Soft</label>
+                        </div>
                         <button id="generateReportBtn" class="btn btn-success">Generate Weekly Report</button>
-                    }
+                    }   
                     <a asp-action="Index" class="btn btn-secondary">Back to Employee List</a>
                     <button id="toggleFilterBtn" class="btn btn-info" style="background-color: #c82333; border-color: #c82333; color: white;"
                             onmouseover="this.style.backgroundColor='#a81d2b'"
@@ -41,6 +59,14 @@
             </div>
 
             <div class="card-body">
+                @if (TempData["ErrorMessage"] != null)
+                {
+                    <div class="alert alert-danger">@TempData["ErrorMessage"]</div>
+                }
+                @if (TempData["SuccessMessage"] != null)
+                {
+                    <div class="alert alert-success">@TempData["SuccessMessage"]</div>
+                }
                 <!-- Date Filter Form -->
                 <div id="filterCard" class="row mb-3">
                     <div class="col-md-12">
@@ -69,6 +95,140 @@
                     </div>
                 </div>
 
+                @if (dayResolutions != null)
+                {
+                    <!-- Timesheet Gaps panel - the PASS/leave/holiday/gap breakdown for every weekday in
+                         the filtered range (see WeeklyReportGapAnalysisService). Strict mode won't let
+                         Generate Weekly Report proceed while any "Unresolved Gap" row remains below. -->
+                    <div id="gapPanel" class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <strong>Timesheet Gaps</strong>
+                            <div class="d-flex align-items-center gap-2">
+                                @if (actionableCount > 0)
+                                {
+                                    <span class="badge bg-danger">@actionableCount needing attention</span>
+                                    <form asp-action="NotifyEmployeeOfGaps" asp-controller="Manager" method="post" class="m-0">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="employeeId" value="@ViewBag.EmployeeId" />
+                                        <input type="hidden" name="startDate" value="@ViewBag.StartDate" />
+                                        <input type="hidden" name="endDate" value="@ViewBag.EndDate" />
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Notify Employee</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">All days resolved</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Hours</th>
+                                        <th>Detail</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var day in dayResolutions)
+                                    {
+                                        <tr class="@(day.Kind == DayResolutionKind.TrueGap ? "table-danger" : day.Kind == DayResolutionKind.NeedsSignature || day.Kind == DayResolutionKind.PendingConfirmation ? "table-warning" : "")">
+                                            <td>@day.Date.ToString("yyyy-MM-dd")</td>
+                                            <td>
+                                                @switch (day.Kind)
+                                                {
+                                                    case DayResolutionKind.Worked:
+                                                        <span>Worked@(day.IsPublicHolidayOvertime ? " (Public Holiday - Overtime)" : "")</span>
+                                                        break;
+                                                    case DayResolutionKind.NeedsSignature:
+                                                        <span>Awaiting Signature</span>
+                                                        break;
+                                                    case DayResolutionKind.ApprovedLeave:
+                                                        <span>Approved Leave</span>
+                                                        break;
+                                                    case DayResolutionKind.PublicHolidayOff:
+                                                        <span>Public Holiday</span>
+                                                        break;
+                                                    case DayResolutionKind.GapResolved:
+                                                        <span>Resolved</span>
+                                                        break;
+                                                    case DayResolutionKind.PendingConfirmation:
+                                                        <span>Employee Proposed</span>
+                                                        break;
+                                                    case DayResolutionKind.TrueGap:
+                                                        <span>Unresolved Gap</span>
+                                                        break;
+                                                }
+                                            </td>
+                                            <td>@FormatHours(day.Hours)</td>
+                                            <td>@day.Note</td>
+                                            <td>
+                                                @if (day.Kind == DayResolutionKind.TrueGap || day.Kind == DayResolutionKind.NeedsSignature)
+                                                {
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <form asp-action="ResolveGap" asp-controller="Manager" method="post" class="d-flex gap-1 align-items-center flex-wrap">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="employeeId" value="@ViewBag.EmployeeId" />
+                                                            <input type="hidden" name="date" value="@day.Date.ToString("yyyy-MM-dd")" />
+                                                            <input type="hidden" name="startDate" value="@ViewBag.StartDate" />
+                                                            <input type="hidden" name="endDate" value="@ViewBag.EndDate" />
+                                                            <select name="method" class="form-select form-select-sm gap-method-select" style="width:auto;">
+                                                                <option value="UnpaidAbsence">Unpaid Absence</option>
+                                                                <option value="RetroactiveLeave">Retroactive Leave</option>
+                                                                <option value="Holiday">Holiday</option>
+                                                                <option value="ManualPunch">Manual Punch</option>
+                                                            </select>
+                                                            <input type="number" name="hours" class="form-control form-control-sm gap-hours-input" style="width:80px; display:none;" placeholder="Hours" step="0.25" min="0" max="24" value="8" />
+                                                            <input type="text" name="notes" class="form-control form-control-sm" style="width:160px;" placeholder="Notes (optional)" maxlength="200" />
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                                @(day.Kind == DayResolutionKind.NeedsSignature ? "Bypass" : "Resolve")
+                                                            </button>
+                                                        </form>
+                                                        <div class="small text-muted">— or —</div>
+                                                        <form asp-action="RequestTimesheetFromEmployee" asp-controller="Manager" method="post" class="d-flex gap-1 align-items-center flex-wrap">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="employeeId" value="@ViewBag.EmployeeId" />
+                                                            <input type="hidden" name="date" value="@day.Date.ToString("yyyy-MM-dd")" />
+                                                            <input type="hidden" name="startDate" value="@ViewBag.StartDate" />
+                                                            <input type="hidden" name="endDate" value="@ViewBag.EndDate" />
+                                                            <input type="text" name="reason" class="form-control form-control-sm" style="width:200px;" placeholder="Reason (optional)" maxlength="200" />
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Request Timesheet</button>
+                                                        </form>
+                                                    </div>
+                                                }
+                                                else if (day.Kind == DayResolutionKind.PendingConfirmation && day.SourceGapResolution != null)
+                                                {
+                                                    <div class="d-flex gap-1">
+                                                        <form asp-action="ConfirmGapResolution" asp-controller="Manager" method="post" class="m-0">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="gapResolutionId" value="@day.SourceGapResolution.Id" />
+                                                            <input type="hidden" name="approve" value="true" />
+                                                            <input type="hidden" name="startDate" value="@ViewBag.StartDate" />
+                                                            <input type="hidden" name="endDate" value="@ViewBag.EndDate" />
+                                                            <button type="submit" class="btn btn-sm btn-outline-success">Confirm</button>
+                                                        </form>
+                                                        <form asp-action="ConfirmGapResolution" asp-controller="Manager" method="post" class="m-0">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="gapResolutionId" value="@day.SourceGapResolution.Id" />
+                                                            <input type="hidden" name="approve" value="false" />
+                                                            <input type="hidden" name="startDate" value="@ViewBag.StartDate" />
+                                                            <input type="hidden" name="endDate" value="@ViewBag.EndDate" />
+                                                            <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+                                                        </form>
+                                                    </div>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
                 @if (!Model.Any())
                 {
                     <div class="alert alert-info" role="alert">
@@ -83,11 +243,12 @@
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>Host Company</th>
+                                <th>Work Location</th>
                                 <th>Start Time</th>
                                 <th>End Time</th>
                                 <th>Total Hours</th>
                                 <th>Tasks</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -95,7 +256,7 @@
                             {
                                 <tr>
                                     <td>@entry.DateOfEntry.ToString("yyyy-MM-dd")</td>
-                                    <td>@entry.HostCompanyName</td>
+                                    <td>@entry.WorkLocation</td>
                                     <td>@entry.StartTime.ToString("HH:mm")</td>
                                     <td>@entry.EndTime.ToString("HH:mm")</td>
                                     <td>@FormatHours(entry.TotalHrsWorked)</td>
@@ -108,7 +269,12 @@
                                             }
                                         }
                                     </td>
-
+                                    <td>
+                                        @if (entry.IsFlaggedForReview)
+                                        {
+                                            <span class="badge bg-warning text-dark" title="@entry.FlagReason">&#9888; Flagged</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -123,7 +289,7 @@
                                    asp-action="EmployeeTimeSheetDetails"
                                    asp-route-id="@ViewBag.EmployeeId"
                                    asp-route-page="@(currentPage - 1)">Previous</a>
-                            </li>
+                            </li> 
 
                             @for (int i = 1; i <= totalPages; i++)
                             {
@@ -150,6 +316,38 @@
     </div>
 </div>
 
+
+<!-- Dedicated antiforgery token for the report-generation POST below - not scraped from an
+     unrelated form on the page, which was fragile. -->
+<form id="reportAntiForgeryForm">@Html.AntiForgeryToken()</form>
+
+<!-- Supervisor Signature Modal - lets the manager sign their own copy of the report -->
+<div class="modal fade" id="supervisorSignatureModal" tabindex="-1" role="dialog" aria-labelledby="supervisorSignatureModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="supervisorSignatureModalLabel">Add Your Signature</h5>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="supervisorSignatureInput">Type your name to sign this report as the supervisor (max 25 characters):</label>
+                    <input type="text" class="form-control" id="supervisorSignatureInput" maxlength="25" required>
+                    <small class="form-text text-muted" style="display: flex; justify-content: flex-end;">
+                        <span id="supervisorSignatureCharCount">0</span>/25 characters
+                    </small>
+                </div>
+                <div class="signature-preview">
+                    <p>Signature Preview:</p>
+                    <div id="supervisorSignaturePreview" style="font-family: 'Whisper', cursive; font-size: 40px; min-height: 50px; border-bottom: 1px solid #ccc; padding-bottom: 5px;"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmSupervisorSignature" style="background-color: #c82333 !important; color: white !important; border-color: #c82333 !important;">Use Signature</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 @section Scripts {
     <script>
@@ -183,19 +381,94 @@
                 });
             }
 
-            if (generateReportBtn) {
+            // Manual Punch is the only gap-resolution method where the manager enters an hours figure -
+            // Unpaid Absence is always 0, Retroactive Leave is always the standard workday (8), both
+            // decided server-side regardless of what's in this field.
+            document.querySelectorAll('.gap-method-select').forEach(function (select) {
+                var hoursInput = select.closest('form').querySelector('.gap-hours-input');
+                function syncHoursVisibility() {
+                    hoursInput.style.display = select.value === 'ManualPunch' ? 'inline-block' : 'none';
+                }
+                select.addEventListener('change', syncHoursVisibility);
+                syncHoursVisibility();
+            });
+
+            // Computed server-side by WeeklyReportGapAnalysisService. True gaps only block Strict mode
+            // (Soft auto-resolves them as Unpaid Absence at generation time) - Awaiting Signature and
+            // Employee Proposed days always block, in either mode, since neither is something Soft
+            // mode can silently paper over.
+            const trueGapCount = @(trueGaps.Count);
+            const alwaysBlockingCount = @(needsSignature.Count + pendingConfirmations.Count);
+
+            const supervisorSignatureModalEl = document.getElementById('supervisorSignatureModal');
+            const supervisorSignatureModal = supervisorSignatureModalEl ? new bootstrap.Modal(supervisorSignatureModalEl) : null;
+            const supervisorSignatureInput = document.getElementById('supervisorSignatureInput');
+            const supervisorSignaturePreview = document.getElementById('supervisorSignaturePreview');
+            const confirmSupervisorSignature = document.getElementById('confirmSupervisorSignature');
+
+            function updateSupervisorSignatureCharCount() {
+                const charCount = supervisorSignatureInput.value.length;
+                document.getElementById('supervisorSignatureCharCount').textContent = charCount;
+            }
+
+            if (supervisorSignatureInput && supervisorSignaturePreview) {
+                supervisorSignatureInput.addEventListener('input', function () {
+                    updateSupervisorSignatureCharCount();
+                    supervisorSignaturePreview.textContent = supervisorSignatureInput.value;
+                });
+            }
+
+            if (generateReportBtn && supervisorSignatureModal) {
                 generateReportBtn.addEventListener('click', function() {
                     const startDate = document.getElementById('startDate').value;
                     const endDate = document.getElementById('endDate').value;
+
+                    // Fail fast client-side too, rather than round-tripping a request the server
+                    // will just reject - this is what was silently producing a 0001-01-01 PDF before.
+                    if (!startDate || !endDate) {
+                        alert('Please filter to a complete week before generating a report.');
+                        return;
+                    }
+
+                    const selectedMode = document.querySelector('input[name="gapResolutionMode"]:checked');
+                    const strictMode = !selectedMode || selectedMode.value === 'Strict';
+                    const blockingCount = alwaysBlockingCount + (strictMode ? trueGapCount : 0);
+                    if (blockingCount > 0) {
+                        alert('This week has ' + blockingCount + ' day(s) that need attention. Resolve, bypass, or ' +
+                            'confirm/reject each one in the Timesheet Gaps panel' +
+                            (strictMode ? ', or switch to Soft mode for open gaps,' : '') + ' before generating the report.');
+                        document.getElementById('gapPanel')?.scrollIntoView({ behavior: 'smooth' });
+                        return;
+                    }
+
+                    supervisorSignatureInput.value = '';
+                    supervisorSignaturePreview.textContent = '';
+                    supervisorSignatureInput.classList.remove('is-invalid');
+                    supervisorSignatureModal.show();
+                });
+            }
+
+            if (confirmSupervisorSignature) {
+                confirmSupervisorSignature.addEventListener('click', function () {
+                    if (!supervisorSignatureInput.value.trim()) {
+                        supervisorSignatureInput.classList.add('is-invalid');
+                        return;
+                    }
+
+                    const startDate = document.getElementById('startDate').value;
+                    const endDate = document.getElementById('endDate').value;
                     const employeeId = '@ViewBag.EmployeeId';
+
+                    supervisorSignatureModal.hide();
 
                     // Submit form to generate PDF
                     var form = document.createElement('form');
                     form.method = 'POST';
                     form.action = '/Manager/GenerateEmployeeWeeklyReport';
 
-                    // Add anti-forgery token
-                    var token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+                    // Dedicated token rendered specifically for this form (see #reportAntiForgeryForm
+                    // above) - not scraped from an unrelated form elsewhere on the page.
+                    var token = document.querySelector('#reportAntiForgeryForm input[name="__RequestVerificationToken"]').value;
                     var tokenInput = document.createElement('input');
                     tokenInput.type = 'hidden';
                     tokenInput.name = '__RequestVerificationToken';
@@ -214,11 +487,24 @@
                     endDateInput.value = endDate;
                     form.appendChild(endDateInput);
 
+                    var gapModeInput = document.createElement('input');
+                    gapModeInput.type = 'hidden';
+                    gapModeInput.name = 'gapResolutionMode';
+                    var selectedModeEl = document.querySelector('input[name="gapResolutionMode"]:checked');
+                    gapModeInput.value = selectedModeEl ? selectedModeEl.value : 'Strict';
+                    form.appendChild(gapModeInput);
+
                     var employeeIdInput = document.createElement('input');
                     employeeIdInput.type = 'hidden';
                     employeeIdInput.name = 'employeeId';
                     employeeIdInput.value = employeeId;
                     form.appendChild(employeeIdInput);
+
+                    var supervisorSignatureInputField = document.createElement('input');
+                    supervisorSignatureInputField.type = 'hidden';
+                    supervisorSignatureInputField.name = 'supervisorSignature';
+                    supervisorSignatureInputField.value = supervisorSignatureInput.value;
+                    form.appendChild(supervisorSignatureInputField);
 
                     document.body.appendChild(form);
                     form.submit();

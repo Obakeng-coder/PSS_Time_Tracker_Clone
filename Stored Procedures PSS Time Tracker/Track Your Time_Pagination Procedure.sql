@@ -17,23 +17,26 @@ BEGIN
 
     DECLARE @Offset INT = (@PageNumber - 1) * @PageSize;
 
-    SELECT 
-        TimeTrackerId,   
+    SELECT
+        TimeTrackerId,
         AzureAdUserId,
         EmployeeName,
         EmployeeSurname,
         JobTitle,
         SupervisorFullName,
-        HostCompanyName,
+        WorkLocation,
         TimeSheetMonth,
         DateOfEntry,
         StartTime,
         EndTime,
         TotalHrsWorked,
         DailyTask,
+        Signature,
         UserAccountAzureAdUserId,
-        IsPublicHoliday
-    FROM 
+        IsPublicHoliday,
+        IsFlaggedForReview,
+        FlagReason
+    FROM
         TimeTracker
     WHERE 
         AzureAdUserId = @AzureAdUserId

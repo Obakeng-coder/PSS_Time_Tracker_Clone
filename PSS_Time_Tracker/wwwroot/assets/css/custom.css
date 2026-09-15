@@ -27,6 +27,22 @@
     text-align: center; /* Optional: Center-align text */
 }
 
+/* .table-striped's default zebra effect only shades odd rows (main.min.css hardcodes
+   --bs-table-striped-bg to #F4F7FA on .table-striped > tbody > tr:nth-of-type(odd) specifically), so a
+   2-3 row table reads as "only the top row has a background" rather than a stripe pattern, and every
+   new row appended to the table only sometimes gets it depending on its position. Every row - present
+   and any appended later, since this is a plain CSS rule with no row-count/index dependency - gets the
+   same shading instead, selecting both parities at matching specificity so this wins outright. */
+.table-striped > tbody > tr:nth-of-type(odd),
+.table-striped > tbody > tr:nth-of-type(even) {
+    --bs-table-striped-bg: #F4F7FA;
+    --bs-table-accent-bg: #F4F7FA;
+}
+
+.table-striped > tbody > tr:hover {
+    --bs-table-accent-bg: rgba(200, 35, 51, 0.08);
+}
+
 .alert.alert-info {
     background-color: #c82333 !important; /* Set the background color */
     color: white !important; /* Ensure the text is white */
@@ -71,4 +87,285 @@
 #notificationsDropDown {
     color: white !important;
     font-weight: bold;
+}
+
+/* Notification bell + dropdown (Views/Shared/Components/NotificationBell). The panel itself is a
+   standard Bootstrap .dropdown-menu, so position/z-index/show-hide all come from bootstrap.min.css -
+   this styles the bell button and everything inside the panel. */
+.notification-bell-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: transparent;
+    color: #4d546b;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    line-height: 0;
+    transition: background-color .15s ease-in-out, color .15s ease-in-out;
+}
+
+    .notification-bell-btn i {
+        font-size: 22px;
+    }
+
+    .notification-bell-btn:hover,
+    .notification-bell-btn[aria-expanded="true"] {
+        background-color: #f4f7fa;
+        color: #c82333;
+    }
+
+.notification-bell-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: #c82333;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    box-shadow: 0 0 0 2px #fff;
+}
+
+.notifications-dropdown {
+    width: 380px;
+    max-width: calc(100vw - 2rem);
+    max-height: 440px;
+    overflow: hidden;
+    flex-direction: column;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(21, 28, 46, 0.14);
+    border: 1px solid #eef0f3;
+}
+
+/* main.min.css's own .dropdown-menu rule (the theme's shared dropdown styling, used for the profile
+   menu etc. too) never sets display:none - it keeps every dropdown at "display: block" permanently
+   and fades it with visibility/opacity instead, toggled by ".dropdown-menu.show". That's fine for
+   narrow menus that stay inside the viewport, but this panel is 380px wide and anchored to the
+   right-most navbar item, so even while "closed" (visibility:hidden, opacity:0) it was still a real,
+   laid-out, absolutely-positioned box pushing past the right edge of the viewport - and a hidden
+   (not display:none) box still counts toward document.body.scrollWidth, which was the actual source
+   of the phantom horizontal-overflow/tablet-breakpoint bug on every page that renders the bell.
+   Scoped to just this component (not the shared .dropdown-menu rule, to avoid changing the fade
+   animation every other dropdown in the app relies on): force real display:none while closed, and
+   restore flex layout only once Bootstrap adds ".show". */
+.notifications-dropdown:not(.show) {
+    display: none !important;
+}
+
+.notifications-dropdown.show {
+    display: flex;
+}
+
+.notifications-dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.1rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #212529;
+    border-bottom: 1px solid #f0f1f4;
+    flex: 0 0 auto;
+}
+
+.notifications-mark-all-read {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #c82333;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .notifications-mark-all-read:hover {
+        text-decoration: underline;
+    }
+
+.notifications-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #98a2b3;
+    cursor: pointer;
+    transition: background-color .12s ease-in-out, color .12s ease-in-out;
+}
+
+    .notifications-close-btn i {
+        font-size: 18px;
+    }
+
+    .notifications-close-btn:hover {
+        background-color: #f4f7fa;
+        color: #212529;
+    }
+
+/* Explicit height (on top of the flex-based sizing above) so the list scrolls reliably regardless of
+   how many notifications there are, rather than the dropdown just growing taller than the viewport. */
+.notifications-dropdown-list {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    max-height: 360px;
+}
+
+/* Dimmed/blurred backdrop behind the open notification panel (Views/Shared/Components/
+   NotificationBell) - shown/hidden by that file's JS, tracking Bootstrap's own dropdown open state.
+   Sits below the dropdown-menu's own z-index (Bootstrap's default is 1000) but above everything else,
+   and closes the panel on click, same as a modal backdrop. */
+.notification-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 18, 26, 0.25);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    z-index: 999;
+}
+
+.notifications-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 2.5rem 1rem;
+    color: #98a2b3;
+}
+
+    .notifications-empty i {
+        font-size: 32px;
+    }
+
+    .notifications-empty p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+.notifications-dropdown-item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.7rem 1.1rem;
+    border: 0;
+    border-bottom: 1px solid #f4f4f6;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color .12s ease-in-out;
+}
+
+    .notifications-dropdown-item:last-child {
+        border-bottom: none;
+    }
+
+    .notifications-dropdown-item:hover {
+        background-color: #f8f9fb;
+    }
+
+    .notifications-dropdown-item.is-unread {
+        background-color: #fdf4f5;
+    }
+
+        .notifications-dropdown-item.is-unread:hover {
+            background-color: #fbe9ea;
+        }
+
+.notifications-unread-dot {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c82333;
+    flex: 0 0 auto;
+}
+
+.notifications-badge {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+}
+
+    .notifications-badge i {
+        font-size: 18px;
+    }
+
+    /* Distinct accent color per notification type - a quick visual sort at a glance. */
+    .notifications-badge.type-leave {
+        background: #e7f0ff;
+        color: #2f6fed;
+    }
+
+    .notifications-badge.type-decision {
+        background: #e6f7ee;
+        color: #1a9d5c;
+    }
+
+    .notifications-badge.type-gap {
+        background: #fff2e0;
+        color: #e08a00;
+    }
+
+    .notifications-badge.type-pending {
+        background: #f2e9ff;
+        color: #7c4dd6;
+    }
+
+    .notifications-badge.type-default {
+        background: #f4f7fa;
+        color: #4d546b;
+    }
+
+.notifications-dropdown-item-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-right: 0.75rem;
+}
+
+.notifications-item-title {
+    font-weight: 600;
+    font-size: 0.87rem;
+    color: #212529;
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.notifications-dropdown-item-message {
+    font-size: 0.8rem;
+    color: #667085;
+    white-space: normal;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.notifications-item-time {
+    font-size: 0.72rem;
+    color: #98a2b3;
+    margin-top: 2px;
 }

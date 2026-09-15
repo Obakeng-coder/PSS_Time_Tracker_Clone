@@ -4,6 +4,14 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Windows Smart App Control blocks the freshly-built, unsigned native apphost .exe
+         that VS's Debug button launches directly. Disabling apphost generation makes VS
+         (and dotnet run) launch via the trusted, Microsoft-signed dotnet.exe instead. -->
+    <UseAppHost>false</UseAppHost>
+    <!-- Lets `dotnet user-secrets` store EmailSettings:ServiceAccountPassword etc. outside the repo
+         in Development, instead of appsettings.json in plaintext. ASP.NET Core loads user secrets
+         automatically once this is set - see README for the exact command. -->
+    <UserSecretsId>b541dafa-80fd-406d-bb77-c98e2cbc5284</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

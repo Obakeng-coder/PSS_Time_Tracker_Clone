@@ -1,0 +1,16 @@
+{
+  "name": "PSS TymSheet - Time Off",
+  "short_name": "TymSheet",
+  "start_url": "/Leave/Create",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#c82333",
+  "icons": [
+    {
+      "src": "/assets/images/neptune.png",
+      "sizes": "any",
+      "type": "image/png"
+    }
+  ]
+}
