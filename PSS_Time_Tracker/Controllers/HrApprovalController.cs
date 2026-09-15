@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PSS_Time_Tracker.Data;
 using PSS_Time_Tracker.Models;
+using PSS_Time_Tracker.Services;
 
 namespace PSS_Time_Tracker.Controllers
 {
@@ -21,12 +22,16 @@ namespace PSS_Time_Tracker.Controllers
         private readonly timeSheetRecorderContext _context;
         private readonly EmailService _emailService;
         private readonly ILogger<HrApprovalController> _logger;
+        private readonly INotificationService _notificationService;
 
-        public HrApprovalController(timeSheetRecorderContext context, EmailService emailService, ILogger<HrApprovalController> logger)
+        public HrApprovalController(
+            timeSheetRecorderContext context, EmailService emailService, ILogger<HrApprovalController> logger,
+            INotificationService notificationService)
         {
             _context = context;
             _emailService = emailService;
             _logger = logger;
+            _notificationService = notificationService;
         }
 
         public async Task<IActionResult> Index(int page = 1)
@@ -133,7 +138,23 @@ namespace PSS_Time_Tracker.Controllers
         private async Task NotifyEmployeeAsync(LeaveRequest leaveRequest, string stageName, string summary)
         {
             var employee = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == leaveRequest.AzureAdUserId);
-            if (employee == null || string.IsNullOrWhiteSpace(employee.Email))
+            if (employee == null)
+            {
+                return;
+            }
+
+            // In-app "bell" notification, alongside the email below - not gated on having an email
+            // address. Covers both call sites: the HR pay-status decision and the Payroll capture
+            // confirmation. Previously this method only ever sent email, so an employee had no way at
+            // all to learn their leave request had moved - confirmed live during QA (zero rows landed
+            // in Notifications for the employee on either an HR approval or a rejection).
+            await _notificationService.CreateAsync(
+                employee.AzureAdUserId, NotificationType.LeaveRequestDecision,
+                $"{stageName} decision on your leave request",
+                summary,
+                "/Leave/Index");
+
+            if (string.IsNullOrWhiteSpace(employee.Email))
             {
                 return;
             }

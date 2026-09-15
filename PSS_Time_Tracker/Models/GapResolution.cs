@@ -5,13 +5,18 @@ namespace PSS_Time_Tracker.Models
 {
     /// <summary>How a gap day is being resolved. ManualPunch is manager-only (attesting to hours with
     /// no employee-signed record) - an employee's self-service picker only ever offers Holiday, Leave,
-    /// or Absent.</summary>
+    /// or Absent. LateSubmission is system-created, never picked by anyone directly: it's set the
+    /// moment an employee backfills a day that was an unresolved gap with a real, signed worked-day
+    /// entry via TimeTrackerController.Create - the entry itself is real (unlike every other method
+    /// here, which has no underlying TimeTracker row), but still needs the manager's sign-off before
+    /// it counts as resolved, same as any other proposed resolution.</summary>
     public enum GapResolutionMethod
     {
         UnpaidAbsence = 0,
         RetroactiveLeave = 1,
         ManualPunch = 2,
-        Holiday = 3
+        Holiday = 3,
+        LateSubmission = 4
     }
 
     /// <summary>Confirmed/AutoResolved both count as resolved for report-generation purposes - the only

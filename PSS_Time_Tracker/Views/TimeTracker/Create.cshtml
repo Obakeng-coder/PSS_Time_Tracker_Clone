@@ -138,45 +138,6 @@
     </div>
 
 
-    <!-- Modal Popup for Error Message -->
-    <div class="modal fade" id="errorModal" tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="errorModalLabel">Timesheet Error</h5>
-
-                </div>
-
-                <div class="modal-body">
-                    You have missed submitting timesheets for the previous week (@TempData["MissedWeekStart"] - @TempData["MissedWeekEnd"]). Please request admin approval to proceed.
-                </div>
-                <div class="modal-footer d-flex justify-content-end" id="errorActionArea">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeErrorModalButton">Close</button>
-
-                    <form asp-action="RequestAdminApproval" asp-controller="TimeTracker" method="post" id="approvalForm">
-                        <button type="submit" class="btn btn-red" id="approvalButton">Request Admin Approval</button>
-                    </form>
-
-
-                    <div class="spinner-border ms-2" role="status" id="errorSpinnerIcon" style="display: none; color: #c82333;">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Green Toast Message -->
-    <div class="toast align-items-center text-white bg-success border-0 position-fixed bottom-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" id="approvalToast">
-        <div class="d-flex">
-            <div class="toast-body">
-                Admin approval request sent successfully!
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-    </div>
-
-
     <!-- Modal Popup for Duplicate Date Error -->
     <div class="modal fade" id="duplicateDateModal" tabindex="-1" role="dialog" aria-labelledby="duplicateDateModalLabel" aria-hidden="true">
         <div class="modal-dialog" role="document">
@@ -225,40 +186,6 @@
 
 </div>
 
-
-<!-- Modal Popup for Rejected Approval -->
-<div class="modal fade" id="rejectedModal" tabindex="-1" role="dialog" aria-labelledby="rejectedModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="rejectedModalLabel">Admin Approval Rejected</h5>
-            </div>
-            <div class="modal-body" id="rejectedModalBody">
-                <!-- Message will be set by JS -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeRejectedModalButton">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Popup for Already Requested Approval -->
-<div class="modal fade" id="alreadyRequestedModal" tabindex="-1" role="dialog" aria-labelledby="alreadyRequestedModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="alreadyRequestedModalLabel">Admin Approval Already Requested</h5>
-            </div>
-            <div class="modal-body" id="alreadyRequestedModalBody">
-                <!-- Message will be set by JS -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="closeAlreadyRequestedModalButton">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
 
 @section Scripts {
     @await Html.PartialAsync("_ValidationScriptsPartial")
@@ -329,17 +256,6 @@
                                 errorsList.append('<li>' + error + '</li>');
                             });
                             $('#validationErrorModal').modal('show');
-                        } else if (response.showModal) {
-                            var startDate = response.missedWeekStart || '@TempData["MissedWeekStart"]';
-                            var endDate = response.missedWeekEnd || '@TempData["MissedWeekEnd"]';
-                            $('#errorModal .modal-body').text(
-                                'You have missed submitting timesheets for the previous week (' +
-                                startDate + ' - ' + endDate + '). Please request admin approval to proceed.'
-                            );
-                            $('#errorModal').modal({
-                                backdrop: 'static',
-                                keyboard: false
-                            }).modal('show');
                         } else if (response.showDuplicateModal) {
                             var errorMessage = '@TempData["DuplicateDateError"]';
                             if (errorMessage) {
@@ -349,49 +265,11 @@
                         } else if (response.redirectUrl) {
                             window.location.href = response.redirectUrl;
                             return;
-                        } else if (response.showRejectedModal) {
-                            $('#rejectedModalBody').text(response.rejectedMessage);
-                            $('#rejectedModal').modal('show');
-                        } else if (response.showAlreadyRequestedModal) {
-                            $('#alreadyRequestedModalBody').text(response.alreadyRequestedMessage);
-                            $('#alreadyRequestedModal').modal('show');
                         }
                         $('#submitText').removeClass('d-none');
                         $('#submitSpinner').addClass('d-none');
                         $('#submitButton').prop('disabled', false)
                             .css('min-width', '120px');
-                    }
-                });
-            });
-
-            // Handle admin approval request
-            $('#errorModal form').submit(function (e) {
-                e.preventDefault();
-                $('#approvalButton').hide();
-                $('#closeErrorModalButton').hide();
-                $('#errorSpinnerIcon').show();
-
-                $.ajax({
-                    url: $(this).attr('action'),
-                    type: $(this).attr('method'),
-                    data: $(this).serialize(),
-                    success: function (response) {
-                        $('#errorModal').modal('hide');
-                        var toast = new bootstrap.Toast(document.getElementById('approvalToast'));
-                        toast.show();
-                        $('#submitText').removeClass('d-none');
-                        $('#submitSpinner').addClass('d-none');
-                        $('#submitButton').prop('disabled', false)
-                            .css('min-width', '120px');
-                    },
-                    error: function (xhr, status, error) {
-                        console.error(error);
-                        alert('Failed to request admin approval. Please try again.');
-                    },
-                    complete: function () {
-                        $('#approvalButton').show();
-                        $('#closeErrorModalButton').show();
-                        $('#errorSpinnerIcon').hide();
                     }
                 });
             });

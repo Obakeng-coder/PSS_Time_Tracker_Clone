@@ -20,10 +20,6 @@
     {
         pageTitle = "Manager Board";
     }
-    else if (currentController == "Admin_Approve_Employee")
-    {
-        pageTitle = "Approve Employees";
-    }
     else if (currentController == "Leave" && currentAction == "Create")
     {
         pageTitle = "Request Time Off";
@@ -161,9 +157,6 @@
                                 <li class="@(currentController == "Manager" && currentAction == "Index" ? "active" : "")">
                                     <a asp-area="" asp-controller="Manager" asp-action="Index">Employee Timesheets</a>
                                 </li>
-                                <li class="@(currentController == "Admin_Approve_Employee" && currentAction == "Index" ? "active" : "")">
-                                    <a asp-area="" asp-controller="Admin_Approve_Employee" asp-action="Index">Approve Employees</a>
-                                </li>
                                 <li class="@(currentController == "LeaveApproval" ? "active" : "")">
                                     <a asp-area="" asp-controller="LeaveApproval" asp-action="Index">Approve Time Off</a>
                                 </li>
@@ -241,7 +234,6 @@
                                 Manager Board
                             </li>
                             <li><a asp-controller="Manager" asp-action="Index">Employee Timesheets</a></li>
-                            <li><a asp-controller="Admin_Approve_Employee" asp-action="Index">Approve Employees</a></li>
                             <li><a asp-controller="LeaveApproval" asp-action="Index">Approve Time Off</a></li>
                         }
                         @if (isHr == true)

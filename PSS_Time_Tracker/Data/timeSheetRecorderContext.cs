@@ -23,8 +23,6 @@ namespace PSS_Time_Tracker.Data
 
         public DbSet<TimesheetCountResult> TimesheetCountResults { get; set; }
 
-        public DbSet<ApprovalUserCountResult> ApprovalUserCountResults { get; set; }
-
         public DbSet<LeaveType> LeaveTypes { get; set; }
         public DbSet<LeaveRequest> LeaveRequests { get; set; }
         public DbSet<LeaveBalance> LeaveBalances { get; set; }
@@ -45,7 +43,6 @@ namespace PSS_Time_Tracker.Data
             modelBuilder.Entity<SpResult>().HasNoKey();
             modelBuilder.Entity<EmployeeSummaryResult>().HasNoKey();
             modelBuilder.Entity<TimesheetCountResult>().HasNoKey();
-            modelBuilder.Entity<ApprovalUserCountResult>().HasNoKey();
 
             // One signature row per employee per reported week - GenerateWeeklyReport (employee) and
             // GenerateEmployeeWeeklyReport (manager) both upsert into this row for the same week rather

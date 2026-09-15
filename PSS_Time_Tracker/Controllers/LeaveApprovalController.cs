@@ -122,7 +122,23 @@ namespace PSS_Time_Tracker.Controllers
         private async Task NotifyEmployeeAsync(LeaveRequest leaveRequest, string stageName, string summary)
         {
             var employee = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == leaveRequest.AzureAdUserId);
-            if (employee == null || string.IsNullOrWhiteSpace(employee.Email))
+            if (employee == null)
+            {
+                return;
+            }
+
+            // In-app "bell" notification, alongside the email below - not gated on having an email
+            // address, same as NotifyHrAsync's. Previously this method only ever sent email, so an
+            // employee had no way at all to learn their leave request was decided short of manually
+            // re-checking Leave/Index - confirmed live during QA (approving/rejecting as manager left
+            // zero rows in Notifications for the employee either way).
+            await _notificationService.CreateAsync(
+                employee.AzureAdUserId, NotificationType.LeaveRequestDecision,
+                $"{stageName} decision on your leave request",
+                summary,
+                "/Leave/Index");
+
+            if (string.IsNullOrWhiteSpace(employee.Email))
             {
                 return;
             }

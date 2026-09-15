@@ -194,17 +194,15 @@ namespace PSS_Time_Tracker.Controllers
             }
 
 
-            var today = DateTime.Today;
-            var dayOfWeek = today.DayOfWeek;
-            var mondayOffset = dayOfWeek == System.DayOfWeek.Sunday ? -6 : (int)System.DayOfWeek.Monday - (int)dayOfWeek;
-            var currentMonday = today.AddDays(mondayOffset);
-            var currentFriday = currentMonday.AddDays(4);
-
-
-            if (viewModel.DateOfEntry < currentMonday || viewModel.DateOfEntry > currentFriday)
+            // Current week is always open; an earlier date is only open when it's itself an unresolved
+            // gap being caught up, and even then only while no OTHER earlier day still needs attention
+            // (see ValidateAgainstUnresolvedGapsAsync's doc comment for the full replaced-approval-flow
+            // rationale). isBackfill is used further down, once the entry has actually saved, to flag
+            // it for the manager's confirmation.
+            var (gapError, isBackfill) = await ValidateAgainstUnresolvedGapsAsync(userId, viewModel.DateOfEntry);
+            if (gapError != null)
             {
-                ModelState.AddModelError("DateOfEntry",
-                    $"You can only select dates from {currentMonday:yyyy-MM-dd} to {currentFriday:yyyy-MM-dd} (current week).");
+                ModelState.AddModelError("DateOfEntry", gapError);
             }
 
             if (!viewModel.IsPublicHoliday &&
@@ -284,66 +282,6 @@ namespace PSS_Time_Tracker.Controllers
                         });
                     }
 
-                    // If users already applied for admin approval
-                    if (userAccount?.ApprovalStatus == 0)
-                    {
-                        return Json(new
-                        {
-                            showAlreadyRequestedModal = true,
-                            alreadyRequestedMessage = "You have already requested admin approval. Please wait for an admin to approve your request before submitting a new timesheet."
-                        });
-                    }
-
-                    // If approval status is 3 (rejected), show modal and do not save
-                    if (userAccount?.ApprovalStatus == 3)
-                    {
-                        return Json(new
-                        {
-                            showRejectedModal = true,
-                            rejectedMessage = "Your initial admin approval request was rejected. You can apply again after 24 hours of the initial application."
-                        });
-                    }
-
-                    // Check if user has any entries in current week
-                    var hasEntriesInCurrentWeek = await _context.TimeTracker
-                        .AnyAsync(t => t.AzureAdUserId == userId &&
-                                      t.DateOfEntry >= currentMonday &&
-                                      t.DateOfEntry <= currentFriday);
-
-                    // Only check for missed previous week if:
-                    // 1. User doesn't have approved status (2)
-                    // 2. Doesn't have any entries in current week yet
-                    // 3. Is trying to submit for current week
-                    // Check if user has any timesheet entries at all
-                    var isFirstTimeUser = !await _context.TimeTracker
-                        .AnyAsync(t => t.AzureAdUserId == userId);
-
-                    if (!isFirstTimeUser &&
-                        userAccount?.ApprovalStatus != 2 &&
-                        !hasEntriesInCurrentWeek &&
-                        viewModel.DateOfEntry >= currentMonday)
-                    {
-                        var previousMonday = currentMonday.AddDays(-7);
-                        var previousFriday = currentFriday.AddDays(-7);
-
-                        var hasEntriesForPreviousWeek = await _context.TimeTracker
-                            .AnyAsync(t => t.AzureAdUserId == userId &&
-                                          t.DateOfEntry >= previousMonday &&
-                                          t.DateOfEntry <= previousFriday);
-
-                        if (!hasEntriesForPreviousWeek)
-                        {
-                            TempData["MissedWeekStart"] = previousMonday.ToString("dd/MM/yyyy");
-                            TempData["MissedWeekEnd"] = previousFriday.ToString("dd/MM/yyyy");
-                            return Json(new
-                            {
-                                showModal = true,
-                                missedWeekStart = previousMonday.ToString("dd/MM/yyyy"),
-                                missedWeekEnd = previousFriday.ToString("dd/MM/yyyy")
-                            });
-                        }
-                    }
-
                     // Employee/manager details now come from the UserAccount row created at
                     // login time, instead of a live Microsoft Graph lookup - except the name, which
                     // (when a SharePoint check-in exists) is re-split from the same Title string shown
@@ -376,15 +314,20 @@ namespace PSS_Time_Tracker.Controllers
                     timeTracker.FlagReason = flagReason;
 
                     _context.TimeTracker.Add(timeTracker);
-
-                    // If user was approved (status = 2), reset to normal status (1) after submission
-                    if (userAccount?.ApprovalStatus == 2)
-                    {
-                        userAccount.ApprovalStatus = 1;
-                        _context.Users.Update(userAccount);
-                    }
-
                     await _context.SaveChangesAsync();
+
+                    // This entry just filled what was, until now, an unresolved gap (see
+                    // ValidateAgainstUnresolvedGapsAsync) - flag it for the manager's confirmation
+                    // before it counts as resolved, same as any other proposed resolution, and let
+                    // them know. WeeklyReportGapAnalysisService shows this date as PendingConfirmation
+                    // (not plain Worked) while that's outstanding.
+                    if (isBackfill)
+                    {
+                        await UpsertPendingGapResolutionAsync(
+                            userId, viewModel.DateOfEntry, GapResolutionMethod.LateSubmission, null,
+                            "Filled in after initially missing this day.", MondayOf(viewModel.DateOfEntry),
+                            hoursOverride: totalHoursDecimal);
+                    }
 
                     return Json(new { redirectUrl = Url.Action(nameof(Index)) });
                 }
@@ -430,12 +373,15 @@ namespace PSS_Time_Tracker.Controllers
                 errors.Add("You can only select dates from Monday to Friday.");
             }
 
-            var today = DateTime.Today;
-            var currentMonday = MondayOf(today);
-            var currentFriday = currentMonday.AddDays(4);
-            if (viewModel.DateOfEntry < currentMonday || viewModel.DateOfEntry > currentFriday)
+            // Same relaxed rule as the worked-day path (ValidateAgainstUnresolvedGapsAsync) - current
+            // week is always open, or an earlier date specifically if it's still an unresolved gap
+            // being flagged as leave instead of clocked. isBackfill is unused here (unlike Create's
+            // worked-day path): flagging IS the resolution, so there's nothing further to mark once
+            // UpsertPendingGapResolutionAsync runs below.
+            var (gapError, _) = await ValidateAgainstUnresolvedGapsAsync(userId, viewModel.DateOfEntry);
+            if (gapError != null)
             {
-                errors.Add($"You can only select dates from {currentMonday:yyyy-MM-dd} to {currentFriday:yyyy-MM-dd} (current week).");
+                errors.Add(gapError);
             }
 
             if (string.IsNullOrWhiteSpace(viewModel.Signature))
@@ -503,50 +449,6 @@ namespace PSS_Time_Tracker.Controllers
             return Json(new { redirectUrl = Url.Action(nameof(Index)) });
         }
 
-
-
-        [HttpPost]
-        public async Task<IActionResult> RequestAdminApproval()
-        {
-            try
-            {
-                var userId = User.GetUserId();
-                var userAccount = await _context.Users
-                    .FirstOrDefaultAsync(u => u.AzureAdUserId == userId);
-
-                if (userAccount != null)
-                {
-                    userAccount.ApprovalStatus = 0; // Requested approval
-                    _context.Users.Update(userAccount);
-                    await _context.SaveChangesAsync();
-
-                    // Send email to manager
-                    if (!string.IsNullOrWhiteSpace(userAccount.SupervisorEmail))
-                    {
-                        var emailService = HttpContext.RequestServices.GetRequiredService<EmailService>();
-                        await emailService.SendAdminApprovalRequestToManagerAsync(
-                            userAccount.SupervisorEmail,
-                            userAccount.SupervisorFullName,
-                            $"{userAccount.EmployeeName} {userAccount.EmployeeSurname}",
-                            userAccount.Email
-                        );
-                    }
-
-                    TempData["ApprovalMessage"] = "Your request for admin approval has been submitted.";
-                }
-                else
-                {
-                    TempData["ApprovalMessage"] = "User account not found.";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error requesting admin approval");
-                TempData["ApprovalMessage"] = "An error occurred while submitting your request.";
-            }
-
-            return RedirectToAction("Create");
-        }
 
 
         public async Task<IActionResult> Index(DateTime? startDate, DateTime? endDate, int page = 1)
@@ -670,15 +572,100 @@ namespace PSS_Time_Tracker.Controllers
             return date.AddDays(mondayOffset);
         }
 
+        /// <summary>How far back an employee can still be blocked by (or backfill) an unresolved gap -
+        /// not their whole history, which would make a years-old gap that predates this feature block
+        /// them forever. 90 days is generous for a genuine "I missed a week or two" catch-up without
+        /// scanning unbounded history on every submission.</summary>
+        private const int GapLookbackDays = 90;
+
+        /// <summary>
+        /// Replaces the old "current week only, or request admin approval to bypass" rule (removed
+        /// along with Admin_Approve_EmployeeController - employees now come from Azure AD/SharePoint,
+        /// already-known and already-vetted, so there's no "unknown employee" case left to gate on).
+        /// An employee may always submit for the current week, or backfill a specific earlier date
+        /// that's still an unresolved gap - exactly "catching up a missed day", nothing else. But while
+        /// ANY earlier day still needs attention (a true gap, or a real entry still missing its
+        /// signature), they're blocked from moving on to the current/a new week until it's dealt with -
+        /// either caught up directly here, or resolved by their manager (ManagerController.ResolveGap /
+        /// ConfirmGapResolution).
+        /// </summary>
+        /// <returns>Null if <paramref name="dateOfEntry"/> is allowed; otherwise the error to show.
+        /// <paramref name="isBackfill"/> is true only when it's allowed specifically because it's a
+        /// genuine unresolved gap being caught up - the caller uses this to know whether to flag the
+        /// entry for the manager's confirmation once it saves (see UpsertPendingGapResolutionAsync).</paramref>
+        private async Task<(string? Error, bool IsBackfill)> ValidateAgainstUnresolvedGapsAsync(string userId, DateTime dateOfEntry)
+        {
+            var currentMonday = MondayOf(DateTime.Today);
+            var currentFriday = currentMonday.AddDays(4);
+
+            if (dateOfEntry >= currentMonday && dateOfEntry <= currentFriday)
+            {
+                // Bounded to whichever is later: the lookback window, or this employee's first-ever
+                // entry - otherwise someone brand new (or newly onboarded from Azure AD, with no
+                // history in this system at all yet) would have their entire pre-employment past
+                // flagged as "gaps" the moment they submit their first timesheet. No entries at all
+                // ever - nothing to catch up on, same as the old isFirstTimeUser bypass this replaces.
+                var earliestEntry = await _context.TimeTracker
+                    .Where(t => t.AzureAdUserId == userId)
+                    .Select(t => (DateTime?)t.DateOfEntry)
+                    .MinAsync();
+                if (earliestEntry == null)
+                {
+                    return (null, false);
+                }
+
+                var lookbackStart = new[] { currentMonday.AddDays(-GapLookbackDays), earliestEntry.Value.Date }.Max();
+                var priorDays = await _gapAnalysisService.AnalyzeWeekAsync(userId, lookbackStart, currentMonday.AddDays(-1));
+                var blockingDates = priorDays.Where(d => d.RequiresAction).Select(d => d.Date).OrderBy(d => d).ToList();
+                if (blockingDates.Any())
+                {
+                    // A handful of dates are worth naming outright; beyond that, naming every one turns
+                    // one message into a wall of dates - the count and range say the same thing more
+                    // readably, and the employee sees the exact days either way once they pick a date
+                    // to fill in (or on Track Your Time's own gap panel).
+                    var dateList = blockingDates.Count <= 5
+                        ? string.Join(", ", blockingDates.Select(d => d.ToString("yyyy-MM-dd")))
+                        : $"{blockingDates.Count} days between {blockingDates.First():yyyy-MM-dd} and {blockingDates.Last():yyyy-MM-dd}";
+                    return ($"You have unresolved timesheet day(s) from a previous week that need attention first - " +
+                        $"{dateList}. Go back and fill in (or flag) those days before logging a new week.", false);
+                }
+                return (null, false);
+            }
+
+            if (dateOfEntry < currentMonday.AddDays(-GapLookbackDays) || dateOfEntry > currentFriday)
+            {
+                return ($"You can only select dates from {currentMonday:yyyy-MM-dd} to {currentFriday:yyyy-MM-dd} (current week), " +
+                    "or an earlier date you still need to catch up on.", false);
+            }
+
+            var weekOfDate = MondayOf(dateOfEntry);
+            var thatWeek = await _gapAnalysisService.AnalyzeWeekAsync(userId, weekOfDate, weekOfDate.AddDays(4));
+            var thatDay = thatWeek.FirstOrDefault(d => d.Date.Date == dateOfEntry.Date);
+            if (thatDay == null || thatDay.Kind != DayResolutionKind.TrueGap)
+            {
+                return ($"{dateOfEntry:yyyy-MM-dd} is outside the current week and isn't an outstanding gap - nothing to catch up on there.", false);
+            }
+
+            return (null, true);
+        }
+
         /// <summary>Creates or overwrites a Pending gap resolution for (userId, date) and notifies that
         /// employee's manager there's something waiting on them - shared by RequestGapResolution (the
         /// Timesheet Gaps self-service picker) and Create's "flag this day as leave" path, so both entry
         /// points behave identically.</summary>
         private async Task UpsertPendingGapResolutionAsync(
-            string userId, DateTime date, GapResolutionMethod method, int? leaveTypeId, string? notes, DateTime weekStart)
+            string userId, DateTime date, GapResolutionMethod method, int? leaveTypeId, string? notes, DateTime weekStart,
+            double? hoursOverride = null)
         {
             double resolvedHours;
-            if (method == GapResolutionMethod.UnpaidAbsence)
+            if (hoursOverride.HasValue)
+            {
+                // LateSubmission only: the real hours from the entry the employee just submitted,
+                // rather than one of the flat defaults below (which only apply to the other methods,
+                // none of which have a real underlying TimeTracker row to read hours from).
+                resolvedHours = hoursOverride.Value;
+            }
+            else if (method == GapResolutionMethod.UnpaidAbsence)
             {
                 resolvedHours = 0;
             }

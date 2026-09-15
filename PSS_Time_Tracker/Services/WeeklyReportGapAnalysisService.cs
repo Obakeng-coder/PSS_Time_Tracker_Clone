@@ -63,9 +63,38 @@ namespace PSS_Time_Tracker.Services
             entriesByDate.TryGetValue(date, out var entry);
             var isHoliday = await _publicHolidayService.IsPublicHolidayAsync(date);
 
+            // Step 0: this date was an unresolved gap that the employee has since backfilled with a
+            // real, signed entry (TimeTrackerController.Create) - unlike every other GapResolution
+            // method, the entry itself is real and would otherwise satisfy Step 1 on its own, but a
+            // late catch-up still needs the manager's explicit sign-off (ManagerController.
+            // ConfirmGapResolution) before it counts as resolved, same as any other proposed
+            // resolution. Only while Pending: once confirmed or rejected, this falls through to Step 1
+            // like a normal signed entry - the confirmation's only job was to gate the report, not to
+            // change how a genuinely worked, signed day is displayed once resolved.
+            if (gapResolutionsByDate.TryGetValue(date, out var lateSubmission) &&
+                lateSubmission.Method == GapResolutionMethod.LateSubmission &&
+                lateSubmission.Status == GapResolutionStatus.Pending)
+            {
+                return new DayResolution
+                {
+                    Date = date,
+                    Kind = DayResolutionKind.PendingConfirmation,
+                    TaskDescription = entry?.DailyTask ?? "",
+                    StartTime = entry?.StartTime,
+                    EndTime = entry?.EndTime,
+                    Hours = entry?.TotalHrsWorked ?? lateSubmission.Hours,
+                    WorkLocation = entry?.WorkLocation,
+                    SignatureDisplay = "(Awaiting Manager Confirmation)",
+                    Note = "Employee Proposed: Late Submission - filled in after initially missing this day",
+                    SourceEntry = entry,
+                    SourceGapResolution = lateSubmission
+                };
+            }
+
             // Step 1: a signed clock-in entry always PASSes on its own, holiday or not - it's just
             // flagged as overtime if it happens to land on a public holiday. A real signature always
-            // wins, even over an existing gap resolution for the same date.
+            // wins, even over an existing gap resolution for the same date (Step 0 above is the one
+            // deliberate exception).
             if (entry != null && !string.IsNullOrWhiteSpace(entry.Signature))
             {
                 return new DayResolution
@@ -209,6 +238,7 @@ namespace PSS_Time_Tracker.Services
             GapResolutionMethod.RetroactiveLeave => "Retroactive Leave",
             GapResolutionMethod.ManualPunch => "Manual Punch (Entered by Manager)",
             GapResolutionMethod.Holiday => "Holiday",
+            GapResolutionMethod.LateSubmission => "Late Submission",
             _ => "Resolved"
         };
 

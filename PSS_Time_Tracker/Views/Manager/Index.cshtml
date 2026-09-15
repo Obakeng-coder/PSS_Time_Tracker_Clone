@@ -61,7 +61,7 @@
                                         </a>
                                     </td>
                                     <td>@employee.TimesheetCount</td>
-                                    <td>@employee.LatestEntry.ToString("yyyy-MM-dd")</td>
+                                    <td>@(employee.LatestEntry.HasValue ? employee.LatestEntry.Value.ToString("yyyy-MM-dd") : "No entries yet")</td>
                                 </tr>
                             }
                         </tbody>

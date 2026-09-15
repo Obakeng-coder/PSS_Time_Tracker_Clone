@@ -72,6 +72,7 @@ namespace PSS_Time_Tracker.Controllers
             int pageSize = 10;
 
             var managerEmail = CurrentManagerEmail;
+            var searchParam = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm;
 
             List<EmployeeSummaryResult> employeeGroups;
             int totalRecords;
@@ -82,6 +83,7 @@ namespace PSS_Time_Tracker.Controllers
             @SupervisorEmail={managerEmail},
             @StartDate={null},
             @EndDate={null},
+            @SearchTerm={searchParam},
             @PageNumber={page},
             @PageSize={pageSize}")
                 .AsNoTracking()
@@ -92,7 +94,8 @@ namespace PSS_Time_Tracker.Controllers
         EXEC GetManagerEmployeeTimeSheetsCount
             @SupervisorEmail={managerEmail},
             @StartDate={null},
-            @EndDate={null}")
+            @EndDate={null},
+            @SearchTerm={searchParam}")
                 .AsNoTracking()
                 .AsEnumerable()
                 .Select(r => r.TotalCount)
@@ -157,9 +160,13 @@ namespace PSS_Time_Tracker.Controllers
             var hasNext = page < totalPages;
 
 
-            var employee = timesheetEntries.FirstOrDefault();
-            var fullName = employee != null
-                ? $"{employee.EmployeeName} {employee.EmployeeSurname}"
+            // Looked up from Users (by the id already validated above via IsManagedByCurrentUserAsync)
+            // rather than inferred from the first paged TimeTracker row - an employee whose whole
+            // range is gap resolutions/leave, with zero raw TimeTracker rows, previously showed as
+            // "Timesheet Details for Unknown" even though their identity was never actually in doubt.
+            var employeeAccount = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == id);
+            var fullName = employeeAccount != null
+                ? $"{employeeAccount.EmployeeName} {employeeAccount.EmployeeSurname}"
                 : "Unknown";
 
 
