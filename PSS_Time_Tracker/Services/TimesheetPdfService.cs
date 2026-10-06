@@ -268,15 +268,7 @@ namespace PSS_Time_Tracker.Services
 
         private static void AddSignatureDataCell(PdfPTable table, string text, Font signatureFont)
         {
-            var cell = new PdfPCell(new Phrase(text, signatureFont))
-            {
-                BackgroundColor = BaseColor.WHITE,
-                HorizontalAlignment = Element.ALIGN_CENTER,
-                VerticalAlignment = Element.ALIGN_MIDDLE,
-                Padding = 10,
-                MinimumHeight = 30
-            };
-            table.AddCell(cell);
+            table.AddCell(SignaturePdfHelper.BuildCell(text, signatureFont, 80f, 30f, padding: 5, minHeight: 30));
         }
 
         private static void AddRedLabelCell(PdfPTable table, string text)
@@ -330,15 +322,8 @@ namespace PSS_Time_Tracker.Services
 
         private static void AddWhiteSignatureCell(PdfPTable table, string text, Font signatureFont)
         {
-            var cell = new PdfPCell(new Phrase(text, signatureFont))
-            {
-                BackgroundColor = BaseColor.WHITE,
-                HorizontalAlignment = Element.ALIGN_CENTER,
-                VerticalAlignment = Element.ALIGN_MIDDLE,
-                Padding = 10,
-                MinimumHeight = 30,
-                BorderWidthLeft = 0
-            };
+            var cell = SignaturePdfHelper.BuildCell(text, signatureFont, 130f, 36f, padding: 6, minHeight: 30);
+            cell.BorderWidthLeft = 0;
             table.AddCell(cell);
         }
 

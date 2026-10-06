@@ -14,9 +14,23 @@
         @if (!Model.HasSharePointCheckIn)
         {
             <div class="alert alert-warning">
-                No check-in/check-out record found in SharePoint for today yet. Check in via the mobile
-                app first - Start Time, End Time, and Total Hours below will fill in automatically once
-                that record exists.
+                No check-in record found in SharePoint for this date yet. Check in via the mobile
+                app first - Start Time below will fill in automatically once that record exists.
+            </div>
+        }
+        else if (!Model.EndTime.HasValue)
+        {
+            <div class="alert alert-info">
+                You're checked in, so you can fill in your timesheet now. Your End Time and Total Hours
+                will be added automatically once you check out in the mobile app.
+            </div>
+        }
+
+        @if (Model.ExistingEntryIdForDate.HasValue)
+        {
+            <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span>You have already captured <strong>@Model.DateOfEntry.ToString("yyyy-MM-dd")</strong>. Pick another date below to capture a different day, or edit that entry.</span>
+                <a asp-action="Edit" asp-route-id="@Model.ExistingEntryIdForDate" class="btn btn-sm btn-outline-dark">Edit that entry</a>
             </div>
         }
 
@@ -38,8 +52,9 @@
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Job Title</label>
-                    <input asp-for="JobTitle" class="form-control" readonly />
+                    <label class="form-label" asp-for="JobTitle">Job Title</label>
+                    <input asp-for="JobTitle" class="form-control" maxlength="100" required placeholder="e.g. Software Developer" />
+                    <span asp-validation-for="JobTitle" class="text-danger"></span>
                 </div>
 
                 <div class="col-md-6">
@@ -93,7 +108,7 @@
                     <div class="col-md-4">
                         <label class="form-label">End Time</label>
                         <input value="@(Model.EndTime?.ToString("HH:mm") ?? "-")" class="form-control" readonly />
-                        <small class="text-muted">From check-out</small>
+                        <small class="text-muted">@(Model.StartTime.HasValue && !Model.EndTime.HasValue ? "Not checked out yet - added automatically" : "From check-out")</small>
                     </div>
 
                     <div class="col-md-4">
@@ -117,11 +132,10 @@
 
                 <div class="col-12">
                     <hr />
-                    <label asp-for="Signature" class="form-label">Employee Signature</label>
-                    <input asp-for="Signature" class="form-control" style="font-style: italic;"
-                           maxlength="100" placeholder="Type your full name to sign this timesheet" autocomplete="off" />
+                    <label class="form-label">Employee Signature</label>
+                    @await Html.PartialAsync("_SignaturePad", new SignaturePadModel { Name = nameof(Model.Signature), Id = "timesheetSignaturePad" })
                     <small class="text-muted" id="signatureHelp">
-                        By typing your name here you're signing off on this day's entry. This signature is
+                        By signing here you're signing off on this day's entry. This signature is
                         what appears on your Weekly Time Sheet PDF once the week is generated.
                     </small>
                     <span asp-validation-for="Signature" class="text-danger"></span>
@@ -235,6 +249,11 @@
             updateMonthFromDate();
 
             $('#timeEntryForm').submit(function (e) {
+                if (!window.SignaturePads.validate(this)) {
+                    e.preventDefault();
+                    return;
+                }
+
                 e.preventDefault();
 
                 $('#submitText').addClass('d-none');
@@ -304,8 +323,8 @@
             }
 
             $('#signatureHelp').text(isLeaveType
-                ? "By typing your name here you're confirming you were on leave that day - this notifies your manager, it doesn't submit hours worked."
-                : "By typing your name here you're signing off on this day's entry. This signature is what appears on your Weekly Time Sheet PDF once the week is generated.");
+                ? "By signing here you're confirming you were on leave that day - this notifies your manager, it doesn't submit hours worked."
+                : "By signing here you're signing off on this day's entry. This signature is what appears on your Weekly Time Sheet PDF once the week is generated.");
         });
     </script>
 }

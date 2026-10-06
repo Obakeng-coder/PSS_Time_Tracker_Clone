@@ -1,0 +1,43 @@
+@model PSS_Time_Tracker.Models.SignaturePadModel
+@{
+    var firstOnPage = Context.Items["SignaturePadAssetsLoaded"] == null;
+    Context.Items["SignaturePadAssetsLoaded"] = true;
+}
+@if (firstOnPage)
+{
+    <link rel="stylesheet" href="~/css/signature-pad.css" asp-append-version="true" />
+}
+
+<div class="sig-pad @(Model.Compact ? "sig-pad-compact" : "")" id="@Model.Id" data-sig-pad>
+    <div class="sig-pad-tabs btn-group btn-group-sm mb-2" role="group">
+        <button type="button" class="btn btn-outline-secondary active" data-sig-mode="draw">Draw</button>
+        <button type="button" class="btn btn-outline-secondary" data-sig-mode="upload">Upload image</button>
+    </div>
+
+    <div class="sig-pad-stage">
+        <canvas class="sig-pad-canvas" width="600" height="200" aria-label="Signature drawing area"></canvas>
+        <span class="sig-pad-hint">Sign here with your mouse, trackpad or finger</span>
+    </div>
+
+    <div class="sig-pad-upload d-none">
+        <input type="file" class="form-control form-control-sm" accept="image/png,image/jpeg" data-sig-file />
+        <small class="text-muted">PNG or JPG of your signature, up to 2 MB.</small>
+    </div>
+
+    <div class="sig-pad-actions d-flex flex-wrap align-items-center gap-2 mt-2">
+        <button type="button" class="btn btn-sm btn-outline-danger" data-sig-clear>Clear</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary d-none" data-sig-use-saved>Use my saved signature</button>
+        <div class="form-check ms-auto mb-0">
+            <input type="checkbox" class="form-check-input" id="@(Model.Id)-remember" data-sig-remember />
+            <label class="form-check-label small" for="@(Model.Id)-remember">Remember on this device</label>
+        </div>
+    </div>
+    <div class="text-danger small mt-1 d-none" data-sig-error>Please sign before continuing.</div>
+
+    <input type="hidden" name="@Model.Name" id="@(Model.Id)-value" data-sig-value />
+</div>
+
+@if (firstOnPage)
+{
+    <script src="~/js/signature-pad.js" asp-append-version="true"></script>
+}

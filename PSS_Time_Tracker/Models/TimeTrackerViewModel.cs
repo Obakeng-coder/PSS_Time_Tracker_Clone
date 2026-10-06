@@ -17,6 +17,11 @@ namespace TimeSheetRecorder.Models.ViewModels
         // Read-only display fields - pulled from UserAccount / SharePoint, not posted back as editable.
         public string EmployeeName { get; set; }
         public string EmployeeSurname { get; set; }
+
+        // Editable: neither Azure AD nor SharePoint has job titles, so the employee types it (prefilled
+        // from their profile once they have).
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Job Title is required.")]
+        [System.ComponentModel.DataAnnotations.StringLength(100)]
         public string JobTitle { get; set; }
         public string SupervisorFullName { get; set; }
 
@@ -61,5 +66,9 @@ namespace TimeSheetRecorder.Models.ViewModels
 
         /// <summary>True once a SharePoint check-in record was actually found for DateOfEntry.</summary>
         public bool HasSharePointCheckIn { get; set; }
+
+        /// <summary>Set when the sheet is opened for a day that already has an entry, so the page can offer
+        /// to edit it rather than leaving the employee to hit the duplicate-date error on submit.</summary>
+        public int? ExistingEntryIdForDate { get; set; }
     }
 }

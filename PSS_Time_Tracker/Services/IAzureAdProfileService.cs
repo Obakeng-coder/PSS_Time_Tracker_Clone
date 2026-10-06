@@ -15,7 +15,7 @@ namespace PSS_Time_Tracker.Services
     /// </summary>
     public interface IAzureAdProfileService
     {
-        /// <summary>Looked up by User Principal Name (usually the same as the employee's email). Null if not found/not configured.</summary>
-        Task<AzureAdProfile?> GetProfileAsync(string userPrincipalName);
+        /// <summary>Looked up by email, matched against either mail or userPrincipalName. Null if not found/not configured.</summary>
+        Task<AzureAdProfile?> GetProfileAsync(string email);
     }
 }

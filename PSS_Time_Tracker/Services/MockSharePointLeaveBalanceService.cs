@@ -6,13 +6,13 @@ namespace PSS_Time_Tracker.Services
     /// </summary>
     public class MockSharePointLeaveBalanceService : ISharePointLeaveBalanceService
     {
-        public Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeFullName)
+        public Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeEmail)
         {
-            var seed = Math.Abs(employeeFullName.GetHashCode());
+            var seed = Math.Abs(employeeEmail.GetHashCode());
 
             return Task.FromResult<SharePointLeaveBalanceRecord?>(new SharePointLeaveBalanceRecord
             {
-                DisplayName = $"(Mock) {employeeFullName}",
+                DisplayName = $"(Mock) {employeeEmail}",
                 AnnualLeave = 15,
                 AnnualLeavesUsed = seed % 10,
                 SickLeave = 30,

@@ -16,9 +16,9 @@ namespace PSS_Time_Tracker.Services
             _logger = logger;
         }
 
-        public async Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeFullName)
+        public async Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeEmail)
         {
-            if (!IsConfigured())
+            if (!IsConfigured() || string.IsNullOrWhiteSpace(employeeEmail))
             {
                 return null;
             }
@@ -26,6 +26,7 @@ namespace PSS_Time_Tracker.Services
             try
             {
                 var listId = await ResolveListIdAsync("LeaveListName", "LeaveInformation");
+                var fieldEmail = Field("LeaveEmail", "Title");
                 var fieldDisplayName = Field("LeaveDisplayName", "displayName");
                 var fieldAnnualLeave = Field("AnnualLeave", "AnnualLeave");
                 var fieldAnnualLeavesUsed = Field("AnnualLeavesUsed", "AnnualLeavesUsed");
@@ -37,11 +38,12 @@ namespace PSS_Time_Tracker.Services
                 var fieldMaternity = Field("MaternityLeave", "MaternityLeave");
                 var fieldPaternity = Field("PaternityLeave", "PaternityLeave");
 
-                // displayName stores "Name | Company" - startswith rather than eq, so the exact
-                // company suffix formatting doesn't have to match.
+                // Matched by email against "Title" (not name/displayName) - email is a reliable key,
+                // and Graph's list-item $filter doesn't support a case-insensitive "eq" (no tolower()
+                // support here), so every row is pulled back and compared case-insensitively in memory
+                // instead of risking a real match being missed over a casing difference.
                 var url = $"{GraphBaseUrl}/sites/{await ResolveSiteIdAsync()}/lists/{listId}/items" +
-                          $"?expand=fields&$top=1" +
-                          $"&$filter=startswith(fields/{fieldDisplayName},'{Uri.EscapeDataString(employeeFullName)}')";
+                          $"?expand=fields&$top=999";
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
@@ -55,12 +57,28 @@ namespace PSS_Time_Tracker.Services
 
                 using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
                 var items = doc.RootElement.GetProperty("value");
-                if (items.GetArrayLength() == 0)
+
+                JsonElement fields = default;
+                var found = false;
+                foreach (var item in items.EnumerateArray())
                 {
+                    var candidateFields = item.GetProperty("fields");
+                    var candidateEmail = GetString(candidateFields, fieldEmail);
+                    if (!string.IsNullOrWhiteSpace(candidateEmail) &&
+                        string.Equals(candidateEmail.Trim(), employeeEmail.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        fields = candidateFields;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    _logger.LogInformation("No SharePoint LeaveInformation row matched {Email}", employeeEmail);
                     return null;
                 }
 
-                var fields = items[0].GetProperty("fields");
                 var displayNameRaw = GetString(fields, fieldDisplayName);
 
                 return new SharePointLeaveBalanceRecord
@@ -79,7 +97,7 @@ namespace PSS_Time_Tracker.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading SharePoint LeaveInformation list for {Name}", employeeFullName);
+                _logger.LogError(ex, "Error reading SharePoint LeaveInformation list for {Email}", employeeEmail);
                 return null;
             }
         }

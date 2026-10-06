@@ -31,11 +31,12 @@ namespace PSS_Time_Tracker.Services
 
     /// <summary>
     /// Reads real leave allowances/usage from the SharePoint "LeaveInformation" list via Microsoft
-    /// Graph, matched by employee full name against that list's "displayName" column (which stores
-    /// "Name | Company", e.g. "Malk Mokgoshi | Providence Soft ZA").
+    /// Graph, matched by employee email against that list's "Title" column (which stores the
+    /// employee's email address, e.g. "malk.mokgoshi@providencesoft.com") - a reliable key, unlike
+    /// matching on name text which can collide or mismatch on formatting.
     /// </summary>
     public interface ISharePointLeaveBalanceService
     {
-        Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeFullName);
+        Task<SharePointLeaveBalanceRecord?> GetLeaveBalanceAsync(string employeeEmail);
     }
 }

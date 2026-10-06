@@ -6,11 +6,13 @@ namespace PSS_Time_Tracker.Services
     /// <summary>
     /// Shared Microsoft Graph plumbing (app-only OAuth token, plus SharePoint site/list ID resolution)
     /// for every Graph-backed service in the app - <see cref="SharePointCheckInService"/> (MobileCheckIn
-    /// list), <see cref="SharePointLeaveBalanceService"/> (LeaveInformation list), and
+    /// list), <see cref="SharePointLeaveBalanceService"/> (LeaveInformation list),
     /// <see cref="AzureAdProfileService"/> (Job Title/Department from the employee's Azure AD profile,
-    /// which doesn't touch SharePoint at all but reuses the same token acquisition). Kept in one place
-    /// since the auth handling is the most security-sensitive part and shouldn't duplicate/drift across
-    /// services. See docs/SharePointIntegration.md.
+    /// which doesn't touch SharePoint at all but reuses the same token acquisition), and
+    /// <see cref="AzureAdProvisioningService"/> (looking a not-yet-provisioned sign-in up in the tenant
+    /// directory - see ConfigSectionName below for why that one points at a different config section).
+    /// Kept in one place since the auth handling is the most security-sensitive part and shouldn't
+    /// duplicate/drift across services. See docs/SharePointIntegration.md.
     /// </summary>
     public abstract class MicrosoftGraphServiceBase
     {
@@ -30,13 +32,23 @@ namespace PSS_Time_Tracker.Services
             Configuration = configuration;
         }
 
+        /// <summary>Which config section holds this service's TenantId/ClientId/ClientSecret (and, for
+        /// the SharePoint-site-resolving services below, SiteHostname/SitePath/list names/field names
+        /// too). Defaults to "SharePointIntegration" - the three services that actually touch SharePoint
+        /// or read arbitrary users' profiles share one app-only credential set there. AzureAdProvisioningService
+        /// overrides this to "AzureAd" instead, reusing the same App Registration/secret already
+        /// configured for interactive sign-in (Program.cs) rather than requiring SharePointIntegration to
+        /// be configured too just to look someone up in the directory - both sections can point at the
+        /// same App Registration's TenantId/ClientId/secret in practice, or different ones.</summary>
+        protected virtual string ConfigSectionName => "SharePointIntegration";
+
         protected bool IsConfigured() =>
-            !string.IsNullOrEmpty(Configuration["SharePointIntegration:TenantId"]) &&
-            !string.IsNullOrEmpty(Configuration["SharePointIntegration:ClientId"]) &&
-            !string.IsNullOrEmpty(Configuration["SharePointIntegration:ClientSecret"]);
+            !string.IsNullOrEmpty(Configuration[$"{ConfigSectionName}:TenantId"]) &&
+            !string.IsNullOrEmpty(Configuration[$"{ConfigSectionName}:ClientId"]) &&
+            !string.IsNullOrEmpty(Configuration[$"{ConfigSectionName}:ClientSecret"]);
 
         protected string Field(string configSuffix, string fallback) =>
-            Configuration[$"SharePointIntegration:Fields:{configSuffix}"] ?? fallback;
+            Configuration[$"{ConfigSectionName}:Fields:{configSuffix}"] ?? fallback;
 
         protected async Task<string> ResolveSiteIdAsync()
         {
@@ -45,8 +57,8 @@ namespace PSS_Time_Tracker.Services
                 return _cachedSiteId;
             }
 
-            var hostname = Configuration["SharePointIntegration:SiteHostname"] ?? "providencesoft.sharepoint.com";
-            var sitePath = Configuration["SharePointIntegration:SitePath"] ?? "/sites/ProvidenceInternal";
+            var hostname = Configuration[$"{ConfigSectionName}:SiteHostname"] ?? "providencesoft.sharepoint.com";
+            var sitePath = Configuration[$"{ConfigSectionName}:SitePath"] ?? "/sites/ProvidenceInternal";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, $"{GraphBaseUrl}/sites/{hostname}:{sitePath}");
             var response = await SendAuthenticatedAsync(request);
@@ -57,10 +69,10 @@ namespace PSS_Time_Tracker.Services
             return _cachedSiteId!;
         }
 
-        /// <param name="listNameConfigKey">Config key under SharePointIntegration for this list's name, e.g. "ListName" or "LeaveListName".</param>
+        /// <param name="listNameConfigKey">Config key under ConfigSectionName for this list's name, e.g. "ListName" or "LeaveListName".</param>
         protected async Task<string> ResolveListIdAsync(string listNameConfigKey, string defaultListName)
         {
-            var listName = Configuration[$"SharePointIntegration:{listNameConfigKey}"] ?? defaultListName;
+            var listName = Configuration[$"{ConfigSectionName}:{listNameConfigKey}"] ?? defaultListName;
 
             if (_cachedListIds.TryGetValue(listName, out var cached))
             {
@@ -99,9 +111,9 @@ namespace PSS_Time_Tracker.Services
                 return _cachedToken;
             }
 
-            var tenantId = Configuration["SharePointIntegration:TenantId"];
-            var clientId = Configuration["SharePointIntegration:ClientId"];
-            var clientSecret = Configuration["SharePointIntegration:ClientSecret"];
+            var tenantId = Configuration[$"{ConfigSectionName}:TenantId"];
+            var clientId = Configuration[$"{ConfigSectionName}:ClientId"];
+            var clientSecret = Configuration[$"{ConfigSectionName}:ClientSecret"];
 
             var tokenRequest = new HttpRequestMessage(HttpMethod.Post,
                 $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token")

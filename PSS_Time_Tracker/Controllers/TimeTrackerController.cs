@@ -19,26 +19,26 @@ namespace PSS_Time_Tracker.Controllers
         private readonly ILogger<TimeTrackerController> _logger;
         private readonly ITimesheetPdfService _pdfService;
         private readonly ISharePointCheckInService _sharePointService;
-        private readonly IAzureAdProfileService _azureAdProfileService;
         private readonly IWeeklyReportGapAnalysisService _gapAnalysisService;
         private readonly INotificationService _notificationService;
+        private readonly ICheckOutSyncService _checkOutSync;
 
         public TimeTrackerController(
             timeSheetRecorderContext context,
             ILogger<TimeTrackerController> logger,
             ITimesheetPdfService pdfService,
             ISharePointCheckInService sharePointService,
-            IAzureAdProfileService azureAdProfileService,
             IWeeklyReportGapAnalysisService gapAnalysisService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ICheckOutSyncService checkOutSync)
         {
             _context = context;
             _logger = logger;
             _pdfService = pdfService;
             _sharePointService = sharePointService;
-            _azureAdProfileService = azureAdProfileService;
             _gapAnalysisService = gapAnalysisService;
             _notificationService = notificationService;
+            _checkOutSync = checkOutSync;
         }
 
         // SharePoint's Title column (and "Reports to") store a full name as one string, e.g.
@@ -56,26 +56,22 @@ namespace PSS_Time_Tracker.Controllers
             };
         }
 
-        // Prefers the employee's real Azure AD Job Title over the local UserAccount value, closer to
-        // how the original (pre-clone) app worked. Falls back gracefully - the local seeded test
-        // accounts use @local.test addresses that don't resolve to any real Azure AD user, so this
-        // simply returns null for them and the local value is used instead.
-        private async Task<string> GetEffectiveJobTitleAsync(PSS_Time_Tracker.Models.UserAccount? userAccount)
-        {
-            if (userAccount == null)
-            {
-                return ".";
-            }
-
-            var profile = await _azureAdProfileService.GetProfileAsync(userAccount.Email);
-            return !string.IsNullOrWhiteSpace(profile?.JobTitle) ? profile!.JobTitle! : (userAccount.JobTitle ?? ".");
-        }
+        // Neither Azure AD nor SharePoint carries a job title here, so it's whatever the employee last
+        // typed on the timesheet/leave form (saved on their profile). The "Not specified" placeholder
+        // from auto-provisioning counts as blank, so the form asks for it instead of showing that.
+        private static string? SavedJobTitle(PSS_Time_Tracker.Models.UserAccount? userAccount) =>
+            string.IsNullOrWhiteSpace(userAccount?.JobTitle) ||
+            userAccount!.JobTitle.Equals("Not specified", StringComparison.OrdinalIgnoreCase) ||
+            userAccount.JobTitle == "."
+                ? null
+                : userAccount.JobTitle;
 
         /// <summary>
         /// <paramref name="date"/> lets a notification (e.g. a manager's Request Timesheet - see
         /// ManagerController.RequestTimesheetFromEmployee) deep-link straight to the day it's about,
-        /// instead of always defaulting to today. If that day already has an entry, editing it is more
-        /// useful than a fresh Create form that would just reject as a duplicate on submit - see Edit.
+        /// instead of always defaulting to today. If a specific day was asked for and already has an entry,
+        /// editing it is more useful than a fresh Create form that would just reject as a duplicate on
+        /// submit - see Edit. Opening the sheet from the menu (no date) always shows the sheet itself.
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> Create(DateTime? date)
@@ -85,7 +81,7 @@ namespace PSS_Time_Tracker.Controllers
 
             var existingEntry = await _context.TimeTracker.FirstOrDefaultAsync(t =>
                 t.AzureAdUserId == userId && t.DateOfEntry.Date == targetDate);
-            if (existingEntry != null)
+            if (existingEntry != null && date.HasValue)
             {
                 return RedirectToAction(nameof(Edit), new { id = existingEntry.TimeTrackerId });
             }
@@ -112,7 +108,7 @@ namespace PSS_Time_Tracker.Controllers
             {
                 EmployeeName = employeeName,
                 EmployeeSurname = employeeSurname,
-                JobTitle = await GetEffectiveJobTitleAsync(userAccount),
+                JobTitle = SavedJobTitle(userAccount) ?? "",
                 SupervisorFullName = userAccount?.SupervisorFullName ?? ".",
                 AzureAdUserId = userId,
                 DateOfEntry = targetDate,
@@ -122,6 +118,7 @@ namespace PSS_Time_Tracker.Controllers
                 // Read-only, always pulled from SharePoint - never a dropdown the employee picks from.
                 WorkLocation = checkIn?.WorkLocation ?? "",
                 HasSharePointCheckIn = checkIn != null,
+                ExistingEntryIdForDate = existingEntry?.TimeTrackerId,
                 LeaveTypeOptions = await _context.LeaveTypes.OrderBy(lt => lt.Name).ToListAsync()
             };
 
@@ -172,18 +169,31 @@ namespace PSS_Time_Tracker.Controllers
                 viewModel.EndTime = viewModel.DateOfEntry.Date;
                 viewModel.DailyTask = "Public Holiday";
             }
-            else if (checkIn?.CheckInTime.HasValue == true && checkIn.CheckOutTime.HasValue)
+            else if (checkIn?.CheckInTime.HasValue == true)
             {
+                // A check-in is all it takes to start the day's timesheet - people often fill it in while
+                // still at work, before checking out. The check-out time and total hours are filled in
+                // automatically once SharePoint has them (see CheckOutSyncService); until then the
+                // entry shows as awaiting check-out and a weekly PDF can't be generated for that day.
                 viewModel.StartTime = checkIn.CheckInTime;
-                viewModel.EndTime = checkIn.CheckOutTime;
                 viewModel.WorkLocation = checkIn.WorkLocation ?? "";
-                totalHoursDecimal = Math.Round((checkIn.CheckOutTime.Value - checkIn.CheckInTime.Value).TotalHours, 2);
+
+                if (checkIn.CheckOutTime.HasValue)
+                {
+                    viewModel.EndTime = checkIn.CheckOutTime;
+                    totalHoursDecimal = Math.Round((checkIn.CheckOutTime.Value - checkIn.CheckInTime.Value).TotalHours, 2);
+                }
+                else
+                {
+                    viewModel.EndTime = null;
+                    totalHoursDecimal = 0;
+                }
             }
             else
             {
                 viewModel.WorkLocation = "";
                 totalHoursDecimal = 0;
-                ModelState.AddModelError("", "No check-in/check-out record was found in SharePoint for this date yet. " +
+                ModelState.AddModelError("", "No check-in record was found in SharePoint for this date yet. " +
                     "Please check in via the mobile app first, then submit your timesheet.");
             }
 
@@ -212,6 +222,11 @@ namespace PSS_Time_Tracker.Controllers
                 ModelState.AddModelError("", "End Time must be after Start Time.");
             }
 
+            if (string.IsNullOrWhiteSpace(viewModel.JobTitle))
+            {
+                ModelState.AddModelError(nameof(viewModel.JobTitle), "Job Title is required.");
+            }
+
             if (string.IsNullOrWhiteSpace(viewModel.WorkLocation))
             {
                 ModelState.AddModelError(nameof(viewModel.WorkLocation),
@@ -223,9 +238,12 @@ namespace PSS_Time_Tracker.Controllers
                 ModelState.AddModelError(nameof(viewModel.DailyTask), "Daily Task is required.");
             }
 
-            // Signature being a non-nullable string already gets ASP.NET Core's implicit required
-            // validation ("The Signature field is required.") when it's missing/blank - no need to
-            // duplicate that with a manual check here.
+            // Signatures are drawn/uploaded images now (a PNG/JPEG data URI) - a typed name or any other
+            // text is rejected, not just a blank one.
+            if (!SignatureHelper.IsSignatureImage(viewModel.Signature))
+            {
+                ModelState.AddModelError(nameof(viewModel.Signature), "Please sign (draw or upload your signature) to confirm this entry.");
+            }
 
             if (!ModelState.IsValid)
             {
@@ -296,13 +314,13 @@ namespace PSS_Time_Tracker.Controllers
                         AzureAdUserId = userId,
                         EmployeeName = savedEmployeeName,
                         EmployeeSurname = savedEmployeeSurname,
-                        JobTitle = await GetEffectiveJobTitleAsync(userAccount),
+                        JobTitle = viewModel.JobTitle.Trim(),
                         SupervisorFullName = userAccount?.SupervisorFullName ?? ".",
                         WorkLocation = viewModel.WorkLocation,
                         TimeSheetMonth = viewModel.TimeSheetMonth,
                         DateOfEntry = viewModel.DateOfEntry,
                         StartTime = viewModel.StartTime.Value,
-                        EndTime = viewModel.EndTime.Value,
+                        EndTime = viewModel.EndTime,
                         TotalHrsWorked = totalHoursDecimal,
                         DailyTask = viewModel.DailyTask,
                         Signature = viewModel.Signature,
@@ -314,6 +332,13 @@ namespace PSS_Time_Tracker.Controllers
                     timeTracker.FlagReason = flagReason;
 
                     _context.TimeTracker.Add(timeTracker);
+
+                    // Remembered on the profile so the form is prefilled next time.
+                    if (userAccount != null)
+                    {
+                        userAccount.JobTitle = timeTracker.JobTitle;
+                    }
+
                     await _context.SaveChangesAsync();
 
                     // This entry just filled what was, until now, an unresolved gap (see
@@ -384,7 +409,7 @@ namespace PSS_Time_Tracker.Controllers
                 errors.Add(gapError);
             }
 
-            if (string.IsNullOrWhiteSpace(viewModel.Signature))
+            if (!SignatureHelper.IsSignatureImage(viewModel.Signature))
             {
                 errors.Add("Signature is required to confirm you were on leave that day.");
             }
@@ -455,6 +480,9 @@ namespace PSS_Time_Tracker.Controllers
         {
             var userId = User.GetUserId();
             int pageSize = 10; // Number of entries per page
+
+            // Pick up any check-outs that have landed in SharePoint since the entries were saved.
+            await _checkOutSync.SyncUserAsync(userId);
 
             var timeEntries = await _context.TimeTracker
          .FromSqlInterpolated($"EXEC GetUserTimeEntriesPaged @AzureAdUserId={userId}, @StartDate={startDate}, @EndDate={endDate}, @PageNumber={page}, @PageSize={pageSize}")
@@ -727,7 +755,7 @@ namespace PSS_Time_Tracker.Controllers
         /// <summary>Lets the employee edit the Daily Task text on one of their own past entries. Only
         /// the task changes - Date, Work Location, Start/End Time and hours all stay server-derived from
         /// SharePoint, same rule as at creation time. Editing clears the existing signature: the
-        /// employee has to re-type it to confirm the edited task, same as the original submission -
+        /// employee has to sign again to confirm the edited task, same as the original submission -
         /// otherwise a corrected entry would carry a signature for text that's since changed.</summary>
         [HttpGet]
         public async Task<IActionResult> Edit(int id)
@@ -756,9 +784,9 @@ namespace PSS_Time_Tracker.Controllers
             {
                 ModelState.AddModelError(nameof(dailyTask), "Daily Task is required.");
             }
-            if (string.IsNullOrWhiteSpace(signature))
+            if (!SignatureHelper.IsSignatureImage(signature))
             {
-                ModelState.AddModelError(nameof(signature), "Signature is required to confirm the edited entry.");
+                ModelState.AddModelError(nameof(signature), "Please sign (draw or upload your signature) to confirm the edited entry.");
             }
             if (!ModelState.IsValid)
             {
@@ -813,6 +841,15 @@ namespace PSS_Time_Tracker.Controllers
                 {
                     TempData["ErrorMessage"] = $"No timesheet entries were found between {startDate:yyyy-MM-dd} " +
                         $"and {endDate:yyyy-MM-dd} - nothing to include in the report.";
+                    return RedirectToAction(nameof(Index));
+                }
+
+                var missingCheckOut = await _checkOutSync.GetMissingCheckOutDatesAsync(userId, startDate, endDate);
+                if (missingCheckOut.Any())
+                {
+                    TempData["ErrorMessage"] = "Couldn't generate the report: no check-out has been recorded yet for " +
+                        $"{string.Join(", ", missingCheckOut.Select(d => d.ToString("yyyy-MM-dd")))}. Check out in the " +
+                        "mobile app - the check-out time and total hours are added automatically - then try again.";
                     return RedirectToAction(nameof(Index));
                 }
 
@@ -891,38 +928,8 @@ namespace PSS_Time_Tracker.Controllers
             }
         }
 
-        // Rule-based anomaly detection (roadmap §7.2): deterministic range checks, not an AI/ML model.
-        // Flags an entry for manager review without blocking the save - the employee can still submit,
-        // but the flag + reason travel with the row for the Manager Board / timesheet details screens.
-        private static (bool Flagged, string? Reason) DetectAnomalies(TimeTrackerModel entry)
-        {
-            if (entry.IsPublicHoliday)
-            {
-                return (false, null);
-            }
-
-            var reasons = new List<string>();
-
-            if (entry.StartTime.TimeOfDay < TimeSpan.FromHours(5))
-            {
-                reasons.Add($"Start time ({entry.StartTime:HH:mm}) is before 5:00 AM.");
-            }
-
-            var shiftLength = entry.EndTime.TimeOfDay - entry.StartTime.TimeOfDay;
-            if (shiftLength > TimeSpan.FromHours(12))
-            {
-                reasons.Add($"Shift is longer than 12 hours ({FormatHoursStatic(shiftLength.TotalHours)}).");
-            }
-
-            return reasons.Count > 0 ? (true, string.Join(" ", reasons)) : (false, null);
-        }
-
-        private static string FormatHoursStatic(double totalHours)
-        {
-            int hours = (int)totalHours;
-            int minutes = (int)Math.Round((totalHours - hours) * 60);
-            return $"{hours}h{minutes:D2}m";
-        }
+        private static (bool Flagged, string? Reason) DetectAnomalies(TimeTrackerModel entry) =>
+            TimesheetRules.DetectAnomalies(entry);
 
         // Keeps UserAccount.SupervisorFullName/SupervisorEmail in step with SharePoint's "Reports to"
         // column, so the Manager Board (which queries by SupervisorEmail - see ManagerController)

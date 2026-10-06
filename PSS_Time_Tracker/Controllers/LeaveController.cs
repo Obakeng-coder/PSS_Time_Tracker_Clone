@@ -66,6 +66,9 @@ namespace PSS_Time_Tracker.Controllers
                 AzureAdUserId = userId,
                 EmployeeName = user?.EmployeeName ?? "",
                 EmployeeSurname = user?.EmployeeSurname ?? "",
+                JobTitle = string.IsNullOrWhiteSpace(user?.JobTitle) ||
+                           user!.JobTitle.Equals("Not specified", StringComparison.OrdinalIgnoreCase) ||
+                           user.JobTitle == "." ? null : user.JobTitle,
                 Department = !string.IsNullOrWhiteSpace(azureProfile?.Department) ? azureProfile!.Department : user?.Department,
                 IdNumber = user?.IdNumber,
                 EmployeeNumber = user?.EmployeeNumber,
@@ -89,6 +92,11 @@ namespace PSS_Time_Tracker.Controllers
             if (leaveType == null)
             {
                 ModelState.AddModelError(nameof(model.LeaveTypeId), "Please select a valid leave type.");
+            }
+
+            if (!SignatureHelper.IsSignatureImage(model.EmployeeSignature))
+            {
+                ModelState.AddModelError(nameof(model.EmployeeSignature), "Please sign the form (draw or upload your signature).");
             }
 
             if (leaveType != null && leaveType.Name.Equals("Other", StringComparison.OrdinalIgnoreCase) &&
@@ -155,7 +163,7 @@ namespace PSS_Time_Tracker.Controllers
             double? remainingBalance = null;
             if (leaveType != null && user != null)
             {
-                var spBalance = await _leaveBalanceService.GetLeaveBalanceAsync($"{user.EmployeeName} {user.EmployeeSurname}");
+                var spBalance = await _leaveBalanceService.GetLeaveBalanceAsync(user.Email);
                 remainingBalance = spBalance != null ? RemainingFor(spBalance, leaveType.Name) : null;
 
                 if (remainingBalance.HasValue && totalDays > remainingBalance.Value)
@@ -191,6 +199,18 @@ namespace PSS_Time_Tracker.Controllers
             };
 
             _context.LeaveRequests.Add(leaveRequest);
+
+            // Nothing upstream (Azure AD/SharePoint) reliably supplies these - saved back onto the
+            // profile so the employee only has to type them once, and so they're there the next time
+            // HR exports this (or a future) request to the official leave form PDF.
+            if (user != null)
+            {
+                user.JobTitle = model.JobTitle!.Trim();
+                user.Department = model.Department;
+                user.IdNumber = model.IdNumber;
+                user.EmployeeNumber = model.EmployeeNumber;
+            }
+
             await _context.SaveChangesAsync();
 
             if (user != null && !string.IsNullOrWhiteSpace(user.SupervisorEmail))
@@ -209,24 +229,7 @@ namespace PSS_Time_Tracker.Controllers
                         "/LeaveApproval/Index");
                 }
 
-                try
-                {
-                    await _emailService.SendLeaveRequestToManagerAsync(
-                        user.SupervisorEmail,
-                        user.SupervisorFullName ?? "Manager",
-                        $"{user.EmployeeName} {user.EmployeeSurname}",
-                        leaveType!.Name,
-                        leaveRequest.StartDate,
-                        leaveRequest.EndDate);
-
-                    TempData["SuccessMessage"] = "Your leave request has been submitted and your manager notified.";
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to send leave request notification email");
-                    TempData["SuccessMessage"] = "Your leave request has been submitted, but the email " +
-                        "notification to your manager failed to send.";
-                }
+                TempData["SuccessMessage"] = "Your leave request has been submitted and your manager notified.";
             }
             else
             {
@@ -253,12 +256,12 @@ namespace PSS_Time_Tracker.Controllers
             var currentYear = DateTime.Today.Year;
 
             // Built from live SharePoint LeaveInformation data rather than a locally-tracked table -
-            // real allowances/usage, matched by name. Falls back to an empty list if the integration
+            // real allowances/usage, matched by email. Falls back to an empty list if the integration
             // isn't configured yet or this employee has no matching row there.
             var balances = new List<LeaveBalance>();
             if (user != null)
             {
-                var spBalance = await _leaveBalanceService.GetLeaveBalanceAsync($"{user.EmployeeName} {user.EmployeeSurname}");
+                var spBalance = await _leaveBalanceService.GetLeaveBalanceAsync(user.Email);
                 if (spBalance != null)
                 {
                     var leaveTypes = await _context.LeaveTypes.ToListAsync();

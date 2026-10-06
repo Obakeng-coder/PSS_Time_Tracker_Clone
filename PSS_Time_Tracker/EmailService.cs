@@ -1,175 +1,112 @@
-﻿using System.Net;
+using System.Net;
+using System.Net.Http.Json;
 using System.Net.Mail;
-using Microsoft.Extensions.Configuration;
-using System.Threading.Tasks;
+using PSS_Time_Tracker.Services;
 
 namespace PSS_Time_Tracker
 {
-    public class EmailService
+    /// <summary>
+    /// Sends the system's emails. Two interchangeable ways, picked by configuration:
+    ///   - SMTP (EmailSettings:SmtpServer set) - free with any mailbox that allows SMTP, e.g. a Gmail
+    ///     account with an app password, or Microsoft 365 if SMTP AUTH is enabled for the mailbox.
+    ///   - Microsoft Graph sendMail (no SmtpServer) - uses the sign-in app registration's secret and the
+    ///     Graph "Mail.Send" application permission; no mailbox password at all.
+    /// Callers never need to care which: <see cref="SendAsync"/> throws a clear error if neither is set up.
+    /// </summary>
+    public class EmailService : MicrosoftGraphServiceBase
     {
-        private readonly IConfiguration _configuration;
+        private readonly ILogger<EmailService> _logger;
 
-        public EmailService(IConfiguration configuration)
+        public EmailService(HttpClient httpClient, IConfiguration configuration, ILogger<EmailService> logger)
+            : base(httpClient, configuration)
         {
-            _configuration = configuration;
+            _logger = logger;
         }
 
-// --------------------------------------------------------------------------------------------------------------------------------
-        public async Task SendLeaveRequestToManagerAsync(
-            string managerEmail,
-            string managerName,
-            string employeeName,
-            string leaveTypeName,
-            DateTime startDate,
-            DateTime endDate)
-        {
-            var emailSettings = _configuration.GetSection("EmailSettings");
+        protected override string ConfigSectionName => "AzureAd";
 
-            using var smtpClient = new SmtpClient(emailSettings["SmtpServer"])
+        private string? SmtpServer => Configuration["EmailSettings:SmtpServer"];
+
+        private string? SenderAddress =>
+            !string.IsNullOrWhiteSpace(Configuration["EmailSettings:SenderAddress"])
+                ? Configuration["EmailSettings:SenderAddress"]
+                : Configuration["EmailSettings:Username"];
+
+        private string FromName => Configuration["EmailSettings:FromName"] ?? "HourTrack";
+
+        public bool IsEmailConfigured() =>
+            !string.IsNullOrWhiteSpace(SenderAddress) &&
+            (!string.IsNullOrWhiteSpace(SmtpServer)
+                ? !string.IsNullOrWhiteSpace(Configuration["EmailSettings:Password"])
+                : IsConfigured());
+
+        public async Task SendAsync(string toEmail, string subject, string body)
+        {
+            if (!IsEmailConfigured())
             {
-                Port = int.Parse(emailSettings["SmtpPort"]),
+                throw new InvalidOperationException(
+                    "Email isn't set up: configure EmailSettings (SmtpServer/Username/Password/SenderAddress) " +
+                    "or the Graph Mail.Send route (SenderAddress + AzureAd client secret).");
+            }
+
+            if (!string.IsNullOrWhiteSpace(SmtpServer))
+            {
+                await SendViaSmtpAsync(toEmail, subject, body);
+            }
+            else
+            {
+                await SendViaGraphAsync(toEmail, subject, body);
+            }
+        }
+
+        private async Task SendViaSmtpAsync(string toEmail, string subject, string body)
+        {
+            using var client = new SmtpClient(SmtpServer, int.Parse(Configuration["EmailSettings:SmtpPort"] ?? "587"))
+            {
                 Credentials = new NetworkCredential(
-                    emailSettings["ServiceAccountEmail"],
-                    emailSettings["ServiceAccountPassword"]),
-                EnableSsl = bool.Parse(emailSettings["EnableSsl"] ?? "true"),
+                    Configuration["EmailSettings:Username"] ?? SenderAddress,
+                    Configuration["EmailSettings:Password"]),
+                EnableSsl = bool.Parse(Configuration["EmailSettings:EnableSsl"] ?? "true"),
                 DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 10000
+                Timeout = 15000
             };
 
-            var fromEmail = new MailAddress(
-                emailSettings["ServiceAccountEmail"],
-                $"{emailSettings["FromName"]}");
-
-            using var mailMessage = new MailMessage(fromEmail, new MailAddress(managerEmail))
+            using var message = new MailMessage(new MailAddress(SenderAddress!, FromName), new MailAddress(toEmail))
             {
-                Subject = "Leave Request Awaiting Your Recommendation",
-                Body = $"Dear {managerName},\n\n" +
-                       $"{employeeName} has requested {leaveTypeName} leave from {startDate:yyyy-MM-dd} " +
-                       $"to {endDate:yyyy-MM-dd}.\n\n" +
-                       "Please review and record your recommendation in the Approve Time Off screen.\n\n" +
-                       "Regards,\n" +
-                       "Timesheet System Team",
+                Subject = subject,
+                Body = body,
                 IsBodyHtml = false
             };
 
-            await smtpClient.SendMailAsync(mailMessage);
+            await client.SendMailAsync(message);
         }
- // --------------------------------------------------------------------------------------------------------------------------------
-        public async Task SendLeaveDecisionEmailAsync(
-            string toEmail,
-            string employeeName,
-            string stageName,
-            string decisionSummary)
+
+        private async Task SendViaGraphAsync(string toEmail, string subject, string body)
         {
-            var emailSettings = _configuration.GetSection("EmailSettings");
-
-            using var smtpClient = new SmtpClient(emailSettings["SmtpServer"])
+            var payload = new
             {
-                Port = int.Parse(emailSettings["SmtpPort"]),
-                Credentials = new NetworkCredential(
-                    emailSettings["ServiceAccountEmail"],
-                    emailSettings["ServiceAccountPassword"]),
-                EnableSsl = bool.Parse(emailSettings["EnableSsl"] ?? "true"),
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 10000
+                message = new
+                {
+                    subject,
+                    body = new { contentType = "Text", content = body },
+                    toRecipients = new[] { new { emailAddress = new { address = toEmail } } }
+                },
+                saveToSentItems = false
             };
 
-            var fromEmail = new MailAddress(
-                emailSettings["ServiceAccountEmail"],
-                $"{emailSettings["FromName"]}");
-
-            using var mailMessage = new MailMessage(fromEmail, new MailAddress(toEmail))
+            using var request = new HttpRequestMessage(HttpMethod.Post,
+                $"{GraphBaseUrl}/users/{Uri.EscapeDataString(SenderAddress!)}/sendMail")
             {
-                Subject = $"Leave Request Update: {stageName}",
-                Body = $"Dear {employeeName},\n\n" +
-                       $"There's an update on your leave request at the {stageName} stage:\n\n" +
-                       $"{decisionSummary}\n\n" +
-                       "Regards,\n" +
-                       "Timesheet System Team",
-                IsBodyHtml = false
+                Content = JsonContent.Create(payload)
             };
 
-            await smtpClient.SendMailAsync(mailMessage);
+            using var response = await SendAuthenticatedAsync(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Graph sendMail to {To} failed: {Status} {Detail}", toEmail, response.StatusCode, detail);
+                throw new HttpRequestException($"Graph sendMail failed with {(int)response.StatusCode}: {detail}");
+            }
         }
- // --------------------------------------------------------------------------------------------------------------------------------
-        public async Task SendLeaveRequestToHrAsync(
-            string hrEmail,
-            string hrName,
-            string employeeName,
-            string leaveTypeName,
-            DateTime startDate,
-            DateTime endDate)
-        {
-            var emailSettings = _configuration.GetSection("EmailSettings");
-
-            using var smtpClient = new SmtpClient(emailSettings["SmtpServer"])
-            {
-                Port = int.Parse(emailSettings["SmtpPort"]),
-                Credentials = new NetworkCredential(
-                    emailSettings["ServiceAccountEmail"],
-                    emailSettings["ServiceAccountPassword"]),
-                EnableSsl = bool.Parse(emailSettings["EnableSsl"] ?? "true"),
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 10000
-            };
-
-            var fromEmail = new MailAddress(
-                emailSettings["ServiceAccountEmail"],
-                $"{emailSettings["FromName"]}");
-
-            using var mailMessage = new MailMessage(fromEmail, new MailAddress(hrEmail))
-            {
-                Subject = "Leave Request Awaiting HR Decision",
-                Body = $"Dear {hrName},\n\n" +
-                       $"{employeeName}'s {leaveTypeName} leave request ({startDate:yyyy-MM-dd} to " +
-                       $"{endDate:yyyy-MM-dd}) has been recommended by their manager and now needs an " +
-                       "HR decision (with pay / without pay / not approved).\n\n" +
-                       "Please review it on the HR Board.\n\n" +
-                       "Regards,\n" +
-                       "Timesheet System Team",
-                IsBodyHtml = false
-            };
-
-            await smtpClient.SendMailAsync(mailMessage);
-        }
-
- // --------------------------------------------------------------------------------------------------------------------------------
-        public async Task SendTimesheetGapNotificationAsync(
-            string toEmail,
-            string employeeName,
-            string gapSummary)
-        {
-            var emailSettings = _configuration.GetSection("EmailSettings");
-
-            using var smtpClient = new SmtpClient(emailSettings["SmtpServer"])
-            {
-                Port = int.Parse(emailSettings["SmtpPort"]),
-                Credentials = new NetworkCredential(
-                    emailSettings["ServiceAccountEmail"],
-                    emailSettings["ServiceAccountPassword"]),
-                EnableSsl = bool.Parse(emailSettings["EnableSsl"] ?? "true"),
-                DeliveryMethod = SmtpDeliveryMethod.Network,
-                Timeout = 10000
-            };
-
-            var fromEmail = new MailAddress(
-                emailSettings["ServiceAccountEmail"],
-                $"{emailSettings["FromName"]}");
-
-            using var mailMessage = new MailMessage(fromEmail, new MailAddress(toEmail))
-            {
-                Subject = "Timesheet Gaps Need Your Attention",
-                Body = $"Dear {employeeName},\n\n" +
-                       $"{gapSummary}\n\n" +
-                       "Regards,\n" +
-                       "Timesheet System Team",
-                IsBodyHtml = false
-            };
-
-            await smtpClient.SendMailAsync(mailMessage);
-        }
-
     }
 }
-// --------------------------------------------------------------------------------------------------------------------------------
-

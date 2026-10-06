@@ -23,15 +23,117 @@ namespace PSS_Time_Tracker.Controllers
         private readonly EmailService _emailService;
         private readonly ILogger<HrApprovalController> _logger;
         private readonly INotificationService _notificationService;
+        private readonly ISharePointLeaveBalanceService _leaveBalanceService;
+        private readonly ILeaveRequestPdfService _pdfService;
 
         public HrApprovalController(
             timeSheetRecorderContext context, EmailService emailService, ILogger<HrApprovalController> logger,
-            INotificationService notificationService)
+            INotificationService notificationService, ISharePointLeaveBalanceService leaveBalanceService,
+            ILeaveRequestPdfService pdfService)
         {
             _context = context;
             _emailService = emailService;
             _logger = logger;
             _notificationService = notificationService;
+            _leaveBalanceService = leaveBalanceService;
+            _pdfService = pdfService;
+        }
+
+        // Same leave-type -> SharePoint-column mapping as LeaveController - duplicated rather than
+        // shared since it's a handful of lines and the two controllers have no other reason to depend
+        // on each other.
+        private static double? RemainingFor(SharePointLeaveBalanceRecord balance, string leaveTypeName) =>
+            leaveTypeName.ToLowerInvariant() switch
+            {
+                "annual" => balance.AnnualRemaining,
+                "sick" => balance.SickRemaining,
+                "family responsibility" => balance.FamilyResponsibilityRemaining,
+                _ => null
+            };
+
+        public async Task<IActionResult> ExportPdf(int id)
+        {
+            var leaveRequest = await _context.LeaveRequests
+                .Include(lr => lr.LeaveType)
+                .FirstOrDefaultAsync(lr => lr.Id == id);
+            if (leaveRequest == null)
+            {
+                return NotFound();
+            }
+
+            var employee = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == leaveRequest.AzureAdUserId);
+            if (employee == null)
+            {
+                return NotFound();
+            }
+
+            string? capturedByName = null, verifiedByName = null;
+            var resolveIds = new[] { leaveRequest.CapturedByUserId, leaveRequest.VerifiedByUserId }
+                .Where(uid => !string.IsNullOrEmpty(uid)).Distinct().ToList();
+            if (resolveIds.Count > 0)
+            {
+                var resolved = await _context.Users
+                    .Where(u => resolveIds.Contains(u.AzureAdUserId))
+                    .ToDictionaryAsync(u => u.AzureAdUserId, u => $"{u.EmployeeName} {u.EmployeeSurname}");
+                if (leaveRequest.CapturedByUserId != null)
+                {
+                    resolved.TryGetValue(leaveRequest.CapturedByUserId, out capturedByName);
+                }
+                if (leaveRequest.VerifiedByUserId != null)
+                {
+                    resolved.TryGetValue(leaveRequest.VerifiedByUserId, out verifiedByName);
+                }
+            }
+
+            double? available = null, balance = null;
+            var leaveTypeName = leaveRequest.LeaveType?.Name ?? "";
+            if (!string.IsNullOrEmpty(employee.Email))
+            {
+                var spBalance = await _leaveBalanceService.GetLeaveBalanceAsync(employee.Email);
+                if (spBalance != null)
+                {
+                    available = RemainingFor(spBalance, leaveTypeName);
+                    balance = available.HasValue ? available.Value - leaveRequest.TotalDays : null;
+                }
+            }
+
+            var pdfRequest = new LeaveRequestPdfRequest
+            {
+                FirstName = employee.EmployeeName,
+                LastName = employee.EmployeeSurname,
+                Department = employee.Department ?? "",
+                IdNumber = employee.IdNumber ?? "",
+                EmployeeNumber = employee.EmployeeNumber ?? "",
+                AddressDuringLeave = leaveRequest.AddressDuringLeave ?? "",
+                TelephoneNumber = leaveRequest.TelephoneNumber ?? "",
+                StartDate = leaveRequest.StartDate,
+                EndDate = leaveRequest.EndDate,
+                TotalDays = leaveRequest.TotalDays,
+                LeaveTypeName = leaveTypeName,
+                OtherLeaveDescription = leaveRequest.OtherLeaveDescription,
+                EmployeeSignature = leaveRequest.EmployeeSignature,
+                EmployeeSignatureDate = leaveRequest.EmployeeSignatureDate,
+                ManagerRecommendation = leaveRequest.ManagerRecommendation,
+                ManagerApprovedPaidLeave = leaveRequest.ManagerApprovedPaidLeave,
+                ManagerRemarks = leaveRequest.ManagerRemarks,
+                ManagerSignature = leaveRequest.ManagerSignature,
+                ManagerDecisionDate = leaveRequest.ManagerDecisionDate,
+                HrDecision = leaveRequest.HrDecision,
+                HrRemarks = leaveRequest.HrRemarks,
+                HrSignature = leaveRequest.HrSignature,
+                HrDecisionDate = leaveRequest.HrDecisionDate,
+                CapturedByName = capturedByName,
+                CapturedDate = leaveRequest.CapturedDate,
+                VerifiedByName = verifiedByName,
+                VerifiedDate = leaveRequest.VerifiedDate,
+                LeaveAvailableDays = available,
+                LeaveGrantedDays = leaveRequest.TotalDays,
+                LeaveBalanceDays = balance
+            };
+
+            var pdfBytes = _pdfService.GenerateLeaveForm(pdfRequest);
+            var fileName = $"LeaveApplication_{employee.EmployeeName}{employee.EmployeeSurname}_{leaveRequest.StartDate:yyyyMMdd}.pdf";
+            return File(pdfBytes, "application/pdf", fileName);
         }
 
         public async Task<IActionResult> Index(int page = 1)
@@ -63,6 +165,12 @@ namespace PSS_Time_Tracker.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> HrDecision(int id, HrDecisionType decision, string? remarks, string signature)
         {
+            if (!SignatureHelper.IsSignatureImage(signature))
+            {
+                TempData["ErrorMessage"] = "Please sign (draw or upload your signature) before submitting.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var leaveRequest = await _context.LeaveRequests.FirstOrDefaultAsync(lr => lr.Id == id);
             if (leaveRequest == null || leaveRequest.Status != LeaveRequestStatus.PendingHR)
             {
@@ -153,24 +261,6 @@ namespace PSS_Time_Tracker.Controllers
                 $"{stageName} decision on your leave request",
                 summary,
                 "/Leave/Index");
-
-            if (string.IsNullOrWhiteSpace(employee.Email))
-            {
-                return;
-            }
-
-            try
-            {
-                await _emailService.SendLeaveDecisionEmailAsync(
-                    employee.Email,
-                    $"{employee.EmployeeName} {employee.EmployeeSurname}",
-                    stageName,
-                    summary);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send leave decision notification email");
-            }
         }
     }
 }

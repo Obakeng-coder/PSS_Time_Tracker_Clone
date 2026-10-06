@@ -1,6 +1,6 @@
 {
-  "name": "PSS TymSheet - Time Off",
-  "short_name": "TymSheet",
+  "name": "PSS HourTrack - Time Off",
+  "short_name": "HourTrack",
   "start_url": "/Leave/Create",
   "scope": "/",
   "display": "standalone",

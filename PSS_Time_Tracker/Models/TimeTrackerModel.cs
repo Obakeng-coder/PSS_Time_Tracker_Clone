@@ -37,8 +37,9 @@ namespace TimeSheetRecorder.Models
         [Required]
         public DateTime StartTime { get; set; }
 
-        [Required]
-        public DateTime EndTime { get; set; }
+        // Null until the check-out is picked up from SharePoint - an entry can be saved with only a
+        // check-in (see Services/CheckOutSyncService.cs), and TotalHrsWorked stays 0 until then.
+        public DateTime? EndTime { get; set; }
 
        public double TotalHrsWorked { get; set; } 
 

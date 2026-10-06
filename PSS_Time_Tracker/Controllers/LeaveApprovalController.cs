@@ -74,6 +74,12 @@ namespace PSS_Time_Tracker.Controllers
         public async Task<IActionResult> ManagerDecision(
             int id, ManagerRecommendation recommendation, bool? approvedPaidLeave, string? remarks, string signature)
         {
+            if (!SignatureHelper.IsSignatureImage(signature))
+            {
+                TempData["ErrorMessage"] = "Please sign (draw or upload your signature) before submitting.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var managerEmail = User.FindFirst("preferred_username")?.Value ?? User.FindFirst("email")?.Value;
 
             var leaveRequest = await _context.LeaveRequests.FirstOrDefaultAsync(lr => lr.Id == id);
@@ -137,24 +143,6 @@ namespace PSS_Time_Tracker.Controllers
                 $"{stageName} decision on your leave request",
                 summary,
                 "/Leave/Index");
-
-            if (string.IsNullOrWhiteSpace(employee.Email))
-            {
-                return;
-            }
-
-            try
-            {
-                await _emailService.SendLeaveDecisionEmailAsync(
-                    employee.Email,
-                    $"{employee.EmployeeName} {employee.EmployeeSurname}",
-                    stageName,
-                    summary);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send leave decision notification email");
-            }
         }
 
         private async Task NotifyHrAsync(LeaveRequest leaveRequest, UserAccount employee)
@@ -172,29 +160,6 @@ namespace PSS_Time_Tracker.Controllers
                 $"{employee.EmployeeName} {employee.EmployeeSurname} needs an HR decision on {leaveTypeName} leave",
                 $"{leaveRequest.StartDate:yyyy-MM-dd} to {leaveRequest.EndDate:yyyy-MM-dd}. Review it on the HR Board.",
                 "/HrApproval/Index");
-
-            foreach (var hrUser in hrUsers)
-            {
-                if (string.IsNullOrWhiteSpace(hrUser.Email))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    await _emailService.SendLeaveRequestToHrAsync(
-                        hrUser.Email,
-                        $"{hrUser.EmployeeName} {hrUser.EmployeeSurname}",
-                        $"{employee.EmployeeName} {employee.EmployeeSurname}",
-                        leaveTypeName,
-                        leaveRequest.StartDate,
-                        leaveRequest.EndDate);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to send leave request notification to HR user {HrEmail}", hrUser.Email);
-                }
-            }
         }
     }
 }

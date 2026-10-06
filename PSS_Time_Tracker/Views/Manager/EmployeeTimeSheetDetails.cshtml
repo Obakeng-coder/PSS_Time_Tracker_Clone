@@ -258,8 +258,15 @@
                                     <td>@entry.DateOfEntry.ToString("yyyy-MM-dd")</td>
                                     <td>@entry.WorkLocation</td>
                                     <td>@entry.StartTime.ToString("HH:mm")</td>
-                                    <td>@entry.EndTime.ToString("HH:mm")</td>
-                                    <td>@FormatHours(entry.TotalHrsWorked)</td>
+                                    @if (entry.EndTime.HasValue)
+                                    {
+                                        <td>@entry.EndTime.Value.ToString("HH:mm")</td>
+                                        <td>@FormatHours(entry.TotalHrsWorked)</td>
+                                    }
+                                    else
+                                    {
+                                        <td colspan="2"><span class="badge bg-warning text-dark">Awaiting check-out</span></td>
+                                    }
                                     <td>
                                         @foreach (var task in (entry.DailyTask ?? "").Split(';'))
                                         {
@@ -329,17 +336,8 @@
                 <h5 class="modal-title" id="supervisorSignatureModalLabel">Add Your Signature</h5>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label for="supervisorSignatureInput">Type your name to sign this report as the supervisor (max 25 characters):</label>
-                    <input type="text" class="form-control" id="supervisorSignatureInput" maxlength="25" required>
-                    <small class="form-text text-muted" style="display: flex; justify-content: flex-end;">
-                        <span id="supervisorSignatureCharCount">0</span>/25 characters
-                    </small>
-                </div>
-                <div class="signature-preview">
-                    <p>Signature Preview:</p>
-                    <div id="supervisorSignaturePreview" style="font-family: 'Whisper', cursive; font-size: 40px; min-height: 50px; border-bottom: 1px solid #ccc; padding-bottom: 5px;"></div>
-                </div>
+                <p class="mb-2">Sign this report as the supervisor - draw your signature or upload an image of it.</p>
+                @await Html.PartialAsync("_SignaturePad", new SignaturePadModel { Name = "supervisorSignature", Id = "supervisorSignaturePad" })
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -402,21 +400,7 @@
 
             const supervisorSignatureModalEl = document.getElementById('supervisorSignatureModal');
             const supervisorSignatureModal = supervisorSignatureModalEl ? new bootstrap.Modal(supervisorSignatureModalEl) : null;
-            const supervisorSignatureInput = document.getElementById('supervisorSignatureInput');
-            const supervisorSignaturePreview = document.getElementById('supervisorSignaturePreview');
             const confirmSupervisorSignature = document.getElementById('confirmSupervisorSignature');
-
-            function updateSupervisorSignatureCharCount() {
-                const charCount = supervisorSignatureInput.value.length;
-                document.getElementById('supervisorSignatureCharCount').textContent = charCount;
-            }
-
-            if (supervisorSignatureInput && supervisorSignaturePreview) {
-                supervisorSignatureInput.addEventListener('input', function () {
-                    updateSupervisorSignatureCharCount();
-                    supervisorSignaturePreview.textContent = supervisorSignatureInput.value;
-                });
-            }
 
             if (generateReportBtn && supervisorSignatureModal) {
                 generateReportBtn.addEventListener('click', function() {
@@ -441,19 +425,17 @@
                         return;
                     }
 
-                    supervisorSignatureInput.value = '';
-                    supervisorSignaturePreview.textContent = '';
-                    supervisorSignatureInput.classList.remove('is-invalid');
+                    window.SignaturePads.clearAll(supervisorSignatureModalEl);
                     supervisorSignatureModal.show();
                 });
             }
 
             if (confirmSupervisorSignature) {
                 confirmSupervisorSignature.addEventListener('click', function () {
-                    if (!supervisorSignatureInput.value.trim()) {
-                        supervisorSignatureInput.classList.add('is-invalid');
+                    if (!window.SignaturePads.validate(supervisorSignatureModalEl)) {
                         return;
                     }
+                    const supervisorSignatureValue = window.SignaturePads.valueOf(supervisorSignatureModalEl);
 
                     const startDate = document.getElementById('startDate').value;
                     const endDate = document.getElementById('endDate').value;
@@ -503,7 +485,7 @@
                     var supervisorSignatureInputField = document.createElement('input');
                     supervisorSignatureInputField.type = 'hidden';
                     supervisorSignatureInputField.name = 'supervisorSignature';
-                    supervisorSignatureInputField.value = supervisorSignatureInput.value;
+                    supervisorSignatureInputField.value = supervisorSignatureValue;
                     form.appendChild(supervisorSignatureInputField);
 
                     document.body.appendChild(form);

@@ -1,98 +1,82 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using PSS_Time_Tracker.Data;
 
 namespace PSS_Time_Tracker.Controllers
 {
-    // Stands in for the old Azure AD sign-in/sign-out endpoints
-    // (Microsoft.Identity.Web.UI's /MicrosoftIdentity/Account/SignIn).
-    // Instead of redirecting to Azure AD, this picks one of the seeded local
-    // test accounts and issues a cookie for it directly.
+    // Sign-in is Azure AD only (Microsoft.Identity.Web, wired up in Program.cs) - the mock
+    // dropdown of seeded local test accounts this controller used to offer is gone; every
+    // employee's access now comes through the real providencesoft.com tenant. Login sends
+    // straight into the OIDC challenge (true single-sign-on behavior - there's only one real way
+    // in, so there's nothing to choose between); it only actually renders a page when there's
+    // something to say (Azure AD not configured at all, or a sign-in attempt just failed).
+    // Program.cs's OnTokenValidated event does the real work: looking the signed-in person up in
+    // Users by email and building the app's own claims from AppIdentityFactory.
     public class AccountController : Controller
     {
-        private readonly timeSheetRecorderContext _context;
         private readonly IConfiguration _configuration;
 
-        public AccountController(timeSheetRecorderContext context, IConfiguration configuration)
+        public AccountController(IConfiguration configuration)
         {
-            _context = context;
             _configuration = configuration;
         }
 
+        private bool AzureAdConfigured =>
+            !string.IsNullOrWhiteSpace(_configuration["AzureAd:ClientId"]) &&
+            !string.IsNullOrWhiteSpace(_configuration["AzureAd:TenantId"]);
+
         [HttpGet]
-        public async Task<IActionResult> Login(string? returnUrl = null)
+        public IActionResult Login(string? returnUrl = null)
         {
+            var authError = Request.Query["authError"].FirstOrDefault();
+
+            // Nothing to choose and nothing to say - go straight to Microsoft. Only stop here (and
+            // render the view below) when Azure AD isn't configured, or the last attempt just failed
+            // and needs to be shown before trying again.
+            if (AzureAdConfigured && string.IsNullOrEmpty(authError))
+            {
+                return RedirectToAction(nameof(AzureLogin), new { returnUrl });
+            }
+
             ViewBag.ReturnUrl = returnUrl;
-            ViewBag.Users = await _context.Users
-                .OrderBy(u => u.IsManager) // employees first, managers last
-                .ThenBy(u => u.EmployeeName)
-                .ToListAsync();
+            ViewBag.AzureAdConfigured = AzureAdConfigured;
+            ViewBag.AuthError = authError;
             return View();
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Login(string azureAdUserId, string? returnUrl = null)
+        [HttpGet]
+        public IActionResult AzureLogin(string? returnUrl = null)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == azureAdUserId);
-            if (user == null)
+            if (!AzureAdConfigured)
             {
-                ModelState.AddModelError("", "Select a valid test account.");
-                ViewBag.ReturnUrl = returnUrl;
-                ViewBag.Users = await _context.Users.OrderBy(u => u.IsManager).ThenBy(u => u.EmployeeName).ToListAsync();
-                return View();
+                return RedirectToAction(nameof(Login), new { returnUrl });
             }
 
-            // This claim set stands in for what Azure AD used to hand us in the OIDC id_token:
-            // a stable user id, a display name, an email/UPN, and (for managers) a "groups"
-            // claim carrying the manager-group id that the "RequireManagerRole" policy checks.
-            // Note: the claim type is the literal string "name" (not ClaimTypes.Name's long URI)
-            // because that's what the existing Views check for (c.Type == "name"), matching the
-            // raw "name" claim Azure AD's OIDC token used to carry.
-            var claims = new List<Claim>
-            {
-                new Claim(ClaimTypes.NameIdentifier, user.AzureAdUserId),
-                new Claim("name", $"{user.EmployeeName} {user.EmployeeSurname}"),
-                new Claim("preferred_username", user.Email),
-                new Claim("email", user.Email),
-            };
+            var redirectUri = !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+                ? returnUrl
+                : Url.Action("Index", "Home");
 
-            if (user.IsManager)
-            {
-                claims.Add(new Claim("groups", _configuration["ManagerGroupId"] ?? "local-managers"));
-            }
-
-            if (user.IsHr)
-            {
-                claims.Add(new Claim("groups", _configuration["HrGroupId"] ?? "local-hr"));
-            }
-
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme, nameType: "name", roleType: ClaimTypes.Role);
-            var principal = new ClaimsPrincipal(identity);
-
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal, new AuthenticationProperties
-            {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
-            });
-
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-            {
-                return Redirect(returnUrl);
-            }
-
-            return RedirectToAction("Index", "Home");
+            return Challenge(
+                new AuthenticationProperties { RedirectUri = redirectUri },
+                OpenIdConnectDefaults.AuthenticationScheme);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> SignOut()
+        public IActionResult SignOut()
         {
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return RedirectToAction("Login");
+            var properties = new AuthenticationProperties { RedirectUri = Url.Action(nameof(Login)) };
+
+            // A federated sign-out (through Microsoft's own logout endpoint too, via the
+            // OpenIdConnect scheme) - not just clearing our own cookie - or the next protected page
+            // gets silently re-authenticated against Azure's still-live session before anyone sees
+            // the login screen. Only when Azure AD is actually configured - the OpenIdConnect scheme
+            // isn't even registered in the (no-Azure-configured) fallback, so signing out of it there
+            // would throw rather than just no-op.
+            return AzureAdConfigured
+                ? SignOut(properties, CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme)
+                : SignOut(properties, CookieAuthenticationDefaults.AuthenticationScheme);
         }
     }
 }

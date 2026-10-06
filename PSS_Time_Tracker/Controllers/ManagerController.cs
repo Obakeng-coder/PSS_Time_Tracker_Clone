@@ -25,19 +25,22 @@ namespace PSS_Time_Tracker.Controllers
         private readonly IWeeklyReportGapAnalysisService _gapAnalysisService;
         private readonly INotificationService _notificationService;
         private readonly EmailService _emailService;
+        private readonly ICheckOutSyncService _checkOutSync;
 
         public ManagerController(
             timeSheetRecorderContext context,
             ITimesheetPdfService pdfService,
             IWeeklyReportGapAnalysisService gapAnalysisService,
             INotificationService notificationService,
-            EmailService emailService)
+            EmailService emailService,
+            ICheckOutSyncService checkOutSync)
         {
             _context = context;
             _pdfService = pdfService;
             _gapAnalysisService = gapAnalysisService;
             _notificationService = notificationService;
             _emailService = emailService;
+            _checkOutSync = checkOutSync;
         }
 
         private string? CurrentManagerEmail =>
@@ -138,6 +141,8 @@ namespace PSS_Time_Tracker.Controllers
             {
                 return Forbid();
             }
+
+            await _checkOutSync.SyncUserAsync(id);
 
             var employeeIdParam = new SqlParameter("@EmployeeId", id);
             var startDateParam = new SqlParameter("@StartDate", (object?)startDate ?? DBNull.Value);
@@ -314,19 +319,6 @@ namespace PSS_Time_Tracker.Controllers
                     employeeId, NotificationType.TimesheetGapFlagged, "Timesheet gaps need your attention", message,
                     $"/TimeTracker/Index?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}");
 
-                if (employee != null && !string.IsNullOrWhiteSpace(employee.Email))
-                {
-                    try
-                    {
-                        await _emailService.SendTimesheetGapNotificationAsync(
-                            employee.Email, $"{employee.EmployeeName} {employee.EmployeeSurname}", message);
-                    }
-                    catch
-                    {
-                        // Email is best-effort here, same as every other notification path in this app -
-                        // the in-app notification above is what actually guarantees delivery.
-                    }
-                }
             }
 
             TempData["SuccessMessage"] = actionableDates.Any()
@@ -364,19 +356,6 @@ namespace PSS_Time_Tracker.Controllers
                 employeeId, NotificationType.TimesheetGapFlagged, $"Timesheet requested for {date:yyyy-MM-dd}", message,
                 $"/TimeTracker/Create?date={date:yyyy-MM-dd}");
 
-            if (employee != null && !string.IsNullOrWhiteSpace(employee.Email))
-            {
-                try
-                {
-                    await _emailService.SendTimesheetGapNotificationAsync(
-                        employee.Email, $"{employee.EmployeeName} {employee.EmployeeSurname}", message);
-                }
-                catch
-                {
-                    // Email is best-effort here, same as every other notification path in this app.
-                }
-            }
-
             TempData["SuccessMessage"] = $"Requested {date:yyyy-MM-dd}'s timesheet from the employee.";
             return RedirectToAction(nameof(EmployeeTimeSheetDetails), new { id = employeeId, startDate, endDate });
         }
@@ -408,7 +387,7 @@ namespace PSS_Time_Tracker.Controllers
                 return RedirectToAction(nameof(EmployeeTimeSheetDetails), new { id = employeeId, startDate, endDate });
             }
 
-            if (string.IsNullOrWhiteSpace(supervisorSignature))
+            if (!SignatureHelper.IsSignatureImage(supervisorSignature))
             {
                 TempData["ErrorMessage"] = "Couldn't generate the report: a supervisor signature is required.";
                 return RedirectToAction(nameof(EmployeeTimeSheetDetails), new { id = employeeId, startDate, endDate });
@@ -424,6 +403,15 @@ namespace PSS_Time_Tracker.Controllers
                 if (employee == null)
                 {
                     return NotFound();
+                }
+
+                var missingCheckOut = await _checkOutSync.GetMissingCheckOutDatesAsync(employeeId, startDate, endDate);
+                if (missingCheckOut.Any())
+                {
+                    TempData["ErrorMessage"] = "Couldn't generate the report: no check-out has been recorded yet for " +
+                        $"{string.Join(", ", missingCheckOut.Select(d => d.ToString("yyyy-MM-dd")))}. The employee needs to " +
+                        "check out in the mobile app - the check-out time and total hours are then added automatically.";
+                    return RedirectToAction(nameof(EmployeeTimeSheetDetails), new { id = employeeId, startDate, endDate });
                 }
 
                 var dayResolutions = await _gapAnalysisService.AnalyzeWeekAsync(employeeId, startDate, endDate);

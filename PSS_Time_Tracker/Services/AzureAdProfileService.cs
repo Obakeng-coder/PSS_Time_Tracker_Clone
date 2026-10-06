@@ -17,38 +17,52 @@ namespace PSS_Time_Tracker.Services
             _logger = logger;
         }
 
-        public async Task<AzureAdProfile?> GetProfileAsync(string userPrincipalName)
+        public async Task<AzureAdProfile?> GetProfileAsync(string email)
         {
-            if (!IsConfigured())
+            if (!IsConfigured() || string.IsNullOrWhiteSpace(email))
             {
                 return null;
             }
 
             try
             {
-                var url = $"{GraphBaseUrl}/users/{Uri.EscapeDataString(userPrincipalName)}?$select=jobTitle,department";
+                // GET /users/{key} only accepts an object id or an EXACT userPrincipalName - not an
+                // arbitrary mail/SMTP address, so a direct path lookup 404s for any real employee whose
+                // UPN differs from their email (a second verified domain, an alias, an on-prem AD
+                // migration). A $filter query checks both properties instead - same fix already applied
+                // to AzureAdProvisioningService's directory lookup.
+                var escapedEmail = email.Replace("'", "''");
+                var url = $"{GraphBaseUrl}/users?$filter=mail eq '{Uri.EscapeDataString(escapedEmail)}' " +
+                    $"or userPrincipalName eq '{Uri.EscapeDataString(escapedEmail)}'" +
+                    "&$select=jobTitle,department";
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
 
                 var response = await SendAuthenticatedAsync(request);
                 if (!response.IsSuccessStatusCode)
                 {
-                    // A 404 here just means this employee's TymSheet email doesn't match a real Azure
-                    // AD account yet (e.g. the local seeded test accounts use @local.test addresses) -
-                    // not necessarily an error worth alarming about, so this stays at Warning.
-                    _logger.LogWarning("Azure AD profile lookup for {Upn} failed: {Status}", userPrincipalName, response.StatusCode);
+                    // Not necessarily an error worth alarming about - e.g. the local seeded test
+                    // accounts use @local.test addresses that don't resolve to any real Azure AD user.
+                    _logger.LogWarning("Azure AD profile lookup for {Email} failed: {Status}", email, response.StatusCode);
                     return null;
                 }
 
                 using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                var matches = doc.RootElement.GetProperty("value");
+                if (matches.GetArrayLength() == 0)
+                {
+                    return null;
+                }
+
+                var root = matches[0];
                 return new AzureAdProfile
                 {
-                    JobTitle = GetStringProperty(doc.RootElement, "jobTitle"),
-                    Department = GetStringProperty(doc.RootElement, "department")
+                    JobTitle = GetStringProperty(root, "jobTitle"),
+                    Department = GetStringProperty(root, "department")
                 };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error reading Azure AD profile for {Upn}", userPrincipalName);
+                _logger.LogError(ex, "Error reading Azure AD profile for {Email}", email);
                 return null;
             }
         }

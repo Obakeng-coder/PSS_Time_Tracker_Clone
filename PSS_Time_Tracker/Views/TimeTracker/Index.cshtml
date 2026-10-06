@@ -187,8 +187,15 @@
                                         <td>@item.WorkLocation</td>
                                         <td>@item.DateOfEntry.ToString("yyyy-MM-dd")</td>
                                         <td>@item.StartTime.ToString("HH:mm")</td>
-                                        <td>@item.EndTime.ToString("HH:mm")</td>
-                                        <td>@FormatHours(item.TotalHrsWorked)</td>
+                                        @if (item.EndTime.HasValue)
+                                        {
+                                            <td>@item.EndTime.Value.ToString("HH:mm")</td>
+                                            <td>@FormatHours(item.TotalHrsWorked)</td>
+                                        }
+                                        else
+                                        {
+                                            <td colspan="2"><span class="badge bg-warning text-dark">Awaiting check-out</span></td>
+                                        }
                                         <td>
                                             @foreach (var task in (item.DailyTask ?? "").Split(';'))
                                             {

@@ -19,22 +19,26 @@
                     </div>
                 }
 
-                <form method="post" asp-action="Create" id="leaveCreateForm">
+                <form method="post" asp-action="Create" id="leaveCreateForm" onsubmit="return window.SignaturePads.validate(this);">
                     @Html.AntiForgeryToken()
                     <input type="hidden" asp-for="AzureAdUserId" />
 
                     <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Department</label>
-                            <input class="form-control" readonly value="@(Model.Department ?? "-")" />
+                        <div class="col-md-12">
+                            <label class="form-label" asp-for="JobTitle">Job Title</label>
+                            <input class="form-control" asp-for="JobTitle" maxlength="100" required />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">ID Number</label>
-                            <input class="form-control" readonly value="@(Model.IdNumber ?? "-")" />
+                            <label class="form-label" asp-for="Department">Department</label>
+                            <input class="form-control" asp-for="Department" required />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Employee Number</label>
-                            <input class="form-control" readonly value="@(Model.EmployeeNumber ?? "-")" />
+                            <label class="form-label" asp-for="IdNumber">ID Number</label>
+                            <input class="form-control" asp-for="IdNumber" required />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" asp-for="EmployeeNumber">Employee Number</label>
+                            <input class="form-control" asp-for="EmployeeNumber" />
                         </div>
 
                         <div class="col-md-6">
@@ -85,8 +89,9 @@
                         <div class="col-12">
                             <hr />
                             <p class="text-muted">I hereby affirm that the information provided in this document is accurate and true to the best of my knowledge.</p>
-                            <label class="form-label" asp-for="EmployeeSignature">Signature (type your full name)</label>
-                            <input class="form-control" asp-for="EmployeeSignature" style="font-family: 'Brush Script MT', cursive; font-size: 1.3rem;" />
+                            <label class="form-label">Signature</label>
+                            @await Html.PartialAsync("_SignaturePad", new SignaturePadModel { Name = nameof(Model.EmployeeSignature), Id = "leaveSignaturePad" })
+                            <span asp-validation-for="EmployeeSignature" class="text-danger"></span>
                         </div>
                     </div>
 

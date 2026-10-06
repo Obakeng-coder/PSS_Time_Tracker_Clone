@@ -113,6 +113,10 @@
 
             event.preventDefault();
 
+            if (window.SignaturePads && !window.SignaturePads.validate(form)) {
+                return;
+            }
+
             const fields = {};
             new FormData(form).forEach((value, key) => {
                 fields[key] = value;
@@ -126,6 +130,9 @@
                         "warning"
                     );
                     form.reset();
+                    if (window.SignaturePads) {
+                        window.SignaturePads.clearAll(form);
+                    }
                     requestSync();
                 })
                 .catch(() => {

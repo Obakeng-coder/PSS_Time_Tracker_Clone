@@ -24,11 +24,11 @@
         </div>
         <div class="mb-3">
             <label class="form-label">Start Time / End Time / Total Hours</label>
-            <input class="form-control" value="@Model.StartTime.ToString("HH:mm") - @Model.EndTime.ToString("HH:mm") (@Model.TotalHrsWorked.ToString("0.##") hrs)" readonly />
+            <input class="form-control" value="@(Model.EndTime.HasValue ? $"{Model.StartTime:HH:mm} - {Model.EndTime.Value:HH:mm} ({Model.TotalHrsWorked:0.##} hrs)" : $"{Model.StartTime:HH:mm} - awaiting check-out")" readonly />
             <small class="text-muted">Pulled from SharePoint at submission time - not editable.</small>
         </div>
 
-        <form asp-action="Edit" asp-route-id="@Model.TimeTrackerId" method="post">
+        <form asp-action="Edit" asp-route-id="@Model.TimeTrackerId" method="post" onsubmit="return window.SignaturePads.validate(this);">
             @Html.AntiForgeryToken()
 
             <div class="mb-3">
@@ -37,9 +37,8 @@
             </div>
 
             <div class="mb-3">
-                <label class="form-label" for="signature">Re-sign to confirm this edit</label>
-                <input type="text" class="form-control" id="signature" name="signature" maxlength="100"
-                       style="font-style: italic;" placeholder="Type your full name to re-sign this entry" autocomplete="off" />
+                <label class="form-label">Re-sign to confirm this edit</label>
+                @await Html.PartialAsync("_SignaturePad", new SignaturePadModel { Name = "signature", Id = "editSignaturePad" })
                 <small class="text-muted">Editing the task clears the previous signature - you need to re-sign to confirm the change.</small>
             </div>
 
