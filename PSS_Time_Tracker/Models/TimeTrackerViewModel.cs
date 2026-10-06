@@ -66,9 +66,5 @@ namespace TimeSheetRecorder.Models.ViewModels
 
         /// <summary>True once a SharePoint check-in record was actually found for DateOfEntry.</summary>
         public bool HasSharePointCheckIn { get; set; }
-
-        /// <summary>Set when the sheet is opened for a day that already has an entry, so the page can offer
-        /// to edit it rather than leaving the employee to hit the duplicate-date error on submit.</summary>
-        public int? ExistingEntryIdForDate { get; set; }
     }
 }

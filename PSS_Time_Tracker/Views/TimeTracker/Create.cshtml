@@ -26,14 +26,6 @@
             </div>
         }
 
-        @if (Model.ExistingEntryIdForDate.HasValue)
-        {
-            <div class="alert alert-warning d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <span>You have already captured <strong>@Model.DateOfEntry.ToString("yyyy-MM-dd")</strong>. Pick another date below to capture a different day, or edit that entry.</span>
-                <a asp-action="Edit" asp-route-id="@Model.ExistingEntryIdForDate" class="btn btn-sm btn-outline-dark">Edit that entry</a>
-            </div>
-        }
-
         <form asp-action="Create" method="post" id="timeEntryForm">
             @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>

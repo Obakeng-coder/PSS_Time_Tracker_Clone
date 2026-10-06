@@ -210,7 +210,7 @@
                                             {
                                                 <span class="badge bg-warning text-dark" title="@item.FlagReason">&#9888; Flagged</span>
                                             }
-                                            <a asp-action="Edit" asp-route-id="@item.TimeTrackerId" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                            <a asp-action="Edit" asp-route-id="@item.TimeTrackerId" class="btn btn-sm btn-edit-entry">Edit</a>
                                         </td>
                                     </tr>
                                 }
@@ -403,6 +403,18 @@
 }
 
 <style>
+    .btn-edit-entry {
+        color: #c82333;
+        border: 1px solid #c82333;
+        background-color: transparent;
+    }
+
+    .btn-edit-entry:hover, .btn-edit-entry:focus, .btn-edit-entry:active {
+        color: #fff;
+        background-color: #c82333;
+        border-color: #c82333;
+    }
+
     body {
         min-height: 100vh;
         width: 100vw;

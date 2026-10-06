@@ -69,22 +69,14 @@ namespace PSS_Time_Tracker.Controllers
         /// <summary>
         /// <paramref name="date"/> lets a notification (e.g. a manager's Request Timesheet - see
         /// ManagerController.RequestTimesheetFromEmployee) deep-link straight to the day it's about,
-        /// instead of always defaulting to today. If a specific day was asked for and already has an entry,
-        /// editing it is more useful than a fresh Create form that would just reject as a duplicate on
-        /// submit - see Edit. Opening the sheet from the menu (no date) always shows the sheet itself.
+        /// instead of always defaulting to today. Existing entries are only ever edited from the Track
+        /// Your Time page (see Edit) - this sheet is for capturing a day.
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> Create(DateTime? date)
         {
             var userId = User.GetUserId();
             var targetDate = date?.Date ?? DateTime.Today;
-
-            var existingEntry = await _context.TimeTracker.FirstOrDefaultAsync(t =>
-                t.AzureAdUserId == userId && t.DateOfEntry.Date == targetDate);
-            if (existingEntry != null && date.HasValue)
-            {
-                return RedirectToAction(nameof(Edit), new { id = existingEntry.TimeTrackerId });
-            }
 
             var userAccount = await _context.Users.FirstOrDefaultAsync(u => u.AzureAdUserId == userId);
 
@@ -118,7 +110,6 @@ namespace PSS_Time_Tracker.Controllers
                 // Read-only, always pulled from SharePoint - never a dropdown the employee picks from.
                 WorkLocation = checkIn?.WorkLocation ?? "",
                 HasSharePointCheckIn = checkIn != null,
-                ExistingEntryIdForDate = existingEntry?.TimeTrackerId,
                 LeaveTypeOptions = await _context.LeaveTypes.OrderBy(lt => lt.Name).ToListAsync()
             };
 

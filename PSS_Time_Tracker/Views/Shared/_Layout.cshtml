@@ -79,20 +79,6 @@
             <div class="logo">
                 <a asp-controller="Home" asp-action="Index" class="logo-icon" style="color: #c82333;">HourTrack</a>
             </div>
-            @* ------------------------------------------------------------------------------------------------------- *@
-            @* Made change here so that Manager features are not visible in side bar *@
-            @{
-                var debugGroups = User.Claims.Where(c => c.Type == "groups").Select(c => c.Value).ToList();
-            }
-            <!-- TEMP DEBUG: Shows your Azure AD groups -->
-            <ul style="color: red; font-size: small;">
-                @foreach (var g in debugGroups)
-                {
-                    <li>@g</li>
-                }
-            </ul>
-            @* ------------------------------------------------------------------------------------------------------- *@
-
             <div class="app-menu">
                 <ul class="accordion-menu">
                     @if (User.Identity?.IsAuthenticated ?? false)
